@@ -25,7 +25,7 @@ mkdir plain &&
         cd ..
 mkdir with-dbg &&
         cd with-dbg &&
-        ../configure --enable-debugger $CFGOPTS &&
+        ../configure $CFGOPTS --enable-debugger LDFLAGS='-pthread' &&
         make &&
         cp bochs $DSTDIR/bin/bochs-dbg &&
         cd ..
