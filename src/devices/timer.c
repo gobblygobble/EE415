@@ -109,7 +109,7 @@ void
 timer_sleep (int64_t ticks) 
 {
   int64_t start = timer_ticks ();
-  struct thread* t - thread_current();
+  struct thread* t = thread_current();
   ASSERT (intr_get_level () == INTR_ON);
 // no condition-checking needed
  /* while (timer_elapsed (start) < ticks) 
