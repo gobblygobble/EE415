@@ -71,6 +71,18 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+static bool compare_priority (const struct list_elem *a,
+			      const struct list_elem *b,
+			      void *aux UNUSED)
+{
+  int priority_a, priority_b;
+
+  priority_a = (list_entry (a, struct thread, elem))->priority;
+  priority_b = (list_entry (b, struct thread, elem))->priority;
+  
+  return (priority_a < priority_b);
+}
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -200,6 +212,11 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  /* if priority of new thread is greater than
+     that of current thread, yield to new thread */
+  if (priority > thread_current ()->priority)
+    thread_yield ();
 
   return tid;
 }
@@ -492,8 +509,10 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  else {
+    list_sort (&ready_list, compare_priority, NULL);
+    return list_entry (list_pop_back (&ready_list), struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
