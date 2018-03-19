@@ -71,14 +71,25 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-static bool compare_priority (const struct list_elem *a,
-			      const struct list_elem *b,
-			      void *aux UNUSED)
+static int
+get_priority_from_list_elem (const struct list_elem *a)
+{
+  struct thread *this = list_entry (a, struct thread, elem);
+  
+  if (is_thread (this))
+    return thread_get_priority_of (this);
+  return -1;
+}
+
+bool
+compare_priority (const struct list_elem *a,
+		  const struct list_elem *b,
+		  void *aux UNUSED)
 {
   int priority_a, priority_b;
 
-  priority_a = (list_entry (a, struct thread, elem))->priority;
-  priority_b = (list_entry (b, struct thread, elem))->priority;
+  priority_a = get_priority_from_list_elem (a);
+  priority_b = get_priority_from_list_elem (b); 
   
   return (priority_a < priority_b);
 }
@@ -359,7 +370,17 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  int original = thread_current ()->priority;
+  int donated = thread_current ()->donated_priority;
+  return original < donated ? donated : original;
+}
+
+int
+thread_get_priority_of (const struct thread *this)
+{
+  int original = this->priority;
+  int donated = this->donated_priority;
+  return original < donated ? donated : original;
 }
 
 /* Sets the current thread's nice value to NICE. */

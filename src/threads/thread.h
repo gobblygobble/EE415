@@ -89,6 +89,8 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+
+    int donated_priority;		/* Temporary, for priority inversion. */
     struct list_elem sleepelem;		/* """ sleeping thread list. */
     int64_t wakeup_time;		/* time for thread to wake up */
 
@@ -134,10 +136,15 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+int thread_get_priority_of (const struct thread *);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+bool compare_priority (const struct list_elem*,
+		       const struct list_elem*,
+		       void *aux UNUSED);
 
 #endif /* threads/thread.h */
