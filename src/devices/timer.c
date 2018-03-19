@@ -37,7 +37,7 @@ static void real_time_delay (int64_t num, int32_t denom);
 /* function to compare wakeup_times of two threads */
 static bool compare_wakeup_time(const struct list_elem *a,
 				const struct list_elem *b,
-				void *aux)
+				void *aux UNUSED)
 {
   int64_t wakeup_a, wakeup_b;
 
@@ -108,20 +108,22 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
-  struct thread* t = thread_current();
   ASSERT (intr_get_level () == INTR_ON);
 // no condition-checking needed
  /* while (timer_elapsed (start) < ticks) 
     thread_yield ();*/
+  //int64_t start = timer_ticks ();
+  struct thread* t = thread_current ();
+  // Interrupts need to be turned off for thread_block()
+  enum intr_level old_level = intr_disable ();
 
-  t->wakeup_time = start + ticks;
-  list_push_back (&sleep_list, &t->sleepelem);
-  list_sort (&sleep_list, compare_wakeup_time, NULL);
+  t->wakeup_time = timer_ticks () + ticks;
+  //list_push_back (&sleep_list, &t->sleepelem);
+  //list_sort (&sleep_list, compare_wakeup_time, NULL);
+  list_insert_ordered (&sleep_list, &t->sleepelem, compare_wakeup_time, NULL);
 
-  intr_disable();
-  thread_block();
-  intr_enable();
+  thread_block ();
+  intr_set_level (old_level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -193,26 +195,29 @@ timer_print_stats (void)
 {
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  
   //enum intr_level old_level;
 
   //old_level = intr_disable();
-  int64_t current = timer_ticks();
+  //int64_t current = timer_ticks();
   struct thread *t;
 
   if (!list_empty (&sleep_list)) {
-    t = list_entry (list_begin(&sleep_list), struct thread, sleepelem);
+    t = list_entry (list_front (&sleep_list), struct thread, sleepelem);
 
-    if (t != list_tail (&sleep_list)) {// && t->wakeup_time <= current)  {
-      list_pop_front(&sleep_list);
-      //thread_unblock(t);
-      //t = list_entry (list_begin(&sleep_list), struct thread, sleepelem);
+    while (//t != list_entry (list_tail (&sleep_list), struct thread, sleepelem) &&
+            t->wakeup_time <= timer_ticks ())  {
+      list_pop_front (&sleep_list);
+      thread_unblock (t);
+      if (list_empty (&sleep_list)) break;
+      t = list_entry (list_front (&sleep_list), struct thread, sleepelem);
     }
   }
   //intr_set_level (old_level);
