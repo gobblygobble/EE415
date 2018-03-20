@@ -5,6 +5,8 @@
 #include <list.h>
 #include <stdint.h>
 
+#include "threads/synch.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -91,6 +93,12 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     struct list_elem sleepelem;		/* """ sleeping thread list. */
     int64_t wakeup_time;		/* time for thread to wake up */
+    struct lock *waiting_lock;		/* The lock that it waits for */
+
+    struct list waiting_list;		/* List of threads that wait on this thread */
+    struct list_elem waitelem;		/* List element for waiting_list */
+
+    int donated_priority;		/* not zero when donated */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -134,10 +142,15 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+int thread_get_priority_of (const struct thread *);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+bool compare_priority (const struct list_elem *,
+			const struct list_elem *,
+			void *);
 
 #endif /* threads/thread.h */

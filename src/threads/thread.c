@@ -71,9 +71,9 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-static bool compare_priority (const struct list_elem *a,
-			      const struct list_elem *b,
-			      void *aux UNUSED)
+bool compare_priority (const struct list_elem *a,
+		       const struct list_elem *b,
+		       void *aux UNUSED)
 {
   int priority_a, priority_b;
 
@@ -254,7 +254,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -325,7 +325,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, compare_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -359,7 +359,19 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  int origin = thread_current ()->priority;
+  int donated = thread_current ()->donated_priority;
+
+  return origin < donated ? donated : origin;
+}
+
+int
+thread_get_priority_of (const struct thread *this)
+{
+  int origin = this->priority;
+  int donated = this->donated_priority;
+
+  return origin < donated ? donated : origin;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -479,6 +491,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+
+  list_init(&t->waiting_list);
+
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
