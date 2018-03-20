@@ -226,7 +226,8 @@ thread_create (const char *name, int priority,
 
   /* if priority of new thread is greater than
      that of current thread, yield to new thread */
-  if (priority > thread_current ()->priority)
+  //if (priority > thread_current ()->priority)
+  if (need_yield ())
     thread_yield ();
 
   return tid;
@@ -623,7 +624,19 @@ allocate_tid (void)
 
   return tid;
 }
-
+
+bool
+need_yield (void)
+{
+  list_sort (&ready_list, compare_priority, NULL);
+  if (list_empty (&ready_list))
+    return false;
+  struct thread *max_thread = list_entry (list_back (&ready_list), struct thread, elem);
+  if (thread_get_priority_of (max_thread) > thread_get_priority ())
+    return true;
+  return false;
+}
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);

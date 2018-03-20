@@ -154,4 +154,6 @@ bool compare_priority (const struct list_elem *,
 			const struct list_elem *,
 			void * UNUSED);
 
+bool need_yield (void);
+
 #endif /* threads/thread.h */
