@@ -91,6 +91,7 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+
     struct list_elem sleepelem;		/* """ sleeping thread list. */
     int64_t wakeup_time;		/* time for thread to wake up */
     struct lock *waiting_lock;		/* The lock that it waits for */
@@ -151,6 +152,6 @@ int thread_get_load_avg (void);
 
 bool compare_priority (const struct list_elem *,
 			const struct list_elem *,
-			void *);
+			void * UNUSED);
 
 #endif /* threads/thread.h */
