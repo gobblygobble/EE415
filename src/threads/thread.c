@@ -703,6 +703,14 @@ system_update_load_avg (void)
 
   load_avg = add_fp_and_fp (part_load_avg, part_ready_threads);
 }
+
+
+struct list*
+get_readylist (void)
+{
+  return &ready_list;
+}
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);

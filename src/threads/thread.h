@@ -164,7 +164,9 @@ bool compare_priority (const struct list_elem *,
 bool need_yield (void);
 
 /* MLFQ Functions */
-void thread_update_priority (struct thread *t)
-void thread_update_recent_cpu (struct thread *t);
+void thread_update_priority (struct thread *);
+void thread_update_recent_cpu (struct thread *);
 void system_update_load_avg (void);
+
+struct list* get_readylist (void);
 #endif /* threads/thread.h */
