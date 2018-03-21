@@ -70,7 +70,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-
+/*
 static int
 get_priority_from_list_elem (const struct list_elem *a)
 {
@@ -79,7 +79,7 @@ get_priority_from_list_elem (const struct list_elem *a)
   if (is_thread (this))
     return thread_get_priority_of (this);
   return -1;
-}
+}*/
 
 bool
 compare_priority (const struct list_elem *a,
@@ -88,10 +88,10 @@ compare_priority (const struct list_elem *a,
 {
   int priority_a, priority_b;
 
-  priority_a = get_priority_from_list_elem (a);
-  priority_b = get_priority_from_list_elem (b); 
+  priority_a = thread_get_priority_of (list_entry (a, struct thread, elem));
+  priority_b = thread_get_priority_of (list_entry (b, struct thread, elem));
   
-  return (priority_a < priority_b);
+  return (priority_a > priority_b);
 }
 
 /* Initializes the threading system by transforming the code
@@ -267,8 +267,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  //list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL);
-  list_push_front (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL);
+  //list_push_front (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -339,8 +339,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    //list_insert_ordered (&ready_list, &cur->elem, compare_priority, NULL);
-    list_push_front (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, compare_priority, NULL);
+    //list_push_front (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -546,7 +546,7 @@ next_thread_to_run (void)
     return idle_thread;
   else {
     list_sort (&ready_list, compare_priority, NULL);
-    return list_entry (list_pop_back (&ready_list), struct thread, elem);
+    return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }
 
@@ -636,10 +636,10 @@ allocate_tid (void)
 bool
 need_yield (void)
 {
-  //list_sort (&ready_list, compare_priority, NULL);
   if (list_empty (&ready_list))
     return false;
-  struct thread *max_thread = list_entry (list_back (&ready_list), struct thread, elem);
+  list_sort (&ready_list, compare_priority, NULL);
+  struct thread *max_thread = list_entry (list_front (&ready_list), struct thread, elem);
   if (thread_get_priority_of (max_thread) > thread_get_priority ())
     return true;
   return false;
