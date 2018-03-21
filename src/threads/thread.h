@@ -96,9 +96,10 @@ struct thread
     int64_t wakeup_time;		/* time for thread to wake up */
     struct lock *waiting_lock;		/* The lock that it waits for */
 
-    struct list waiting_list;		/* List of threads that wait on this thread */
-    struct list_elem waitelem;		/* List element for waiting_list */
-
+    //struct list waiting_list;		/* List of threads that wait on this thread */
+    //struct list_elem waitelem;		/* List element for waiting_list */
+    struct list lock_list;
+    struct thread *max_waiter;
     int donated_priority;		/* not zero when donated */
 
     /* Shared between thread.c and synch.c. */

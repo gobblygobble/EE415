@@ -383,8 +383,12 @@ thread_get_priority (void)
 int
 thread_get_priority_of (const struct thread *this)
 {
-  int origin = this->priority;
-  int donated = this->donated_priority;
+  int origin, donated;
+
+  if (this == NULL) return 0;
+
+  origin = this->priority;
+  donated = this->donated_priority;
 
   return origin < donated ? donated : origin;
 }
@@ -507,7 +511,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
 
-  list_init(&t->waiting_list);
+  list_init(&t->lock_list);
 
   t->magic = THREAD_MAGIC;
 
