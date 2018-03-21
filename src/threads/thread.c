@@ -227,7 +227,8 @@ thread_create (const char *name, int priority,
   /* if priority of new thread is greater than
      that of current thread, yield to new thread */
   //if (priority > thread_current ()->priority)
-  if (need_yield ())
+  //if (need_yield ())
+  if (priority > thread_get_priority ())
     thread_yield ();
 
   return tid;

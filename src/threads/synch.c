@@ -318,11 +318,11 @@ lock_acquire (struct lock *lock)
   lock->holder = thread_current ();
   thread_current ()->waiting_lock = NULL;
   // If there was no waiter of the lock at that moment, set to NULL
-  /*if (list_empty (&sema->waiters)) {
+  if (list_empty (&sema->waiters)) {
     lock->max_waiter = NULL;
   }
   list_insert_ordered (&thread_current ()->lock_list, &lock->elem, compare_max_waiter, NULL);
-  thread_current ()->max_waiter = list_entry(list_front(&thread_current ()->lock_list), struct lock, elem)->max_waiter;*/
+  thread_current ()->max_waiter = list_entry(list_front(&thread_current ()->lock_list), struct lock, elem)->max_waiter;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
