@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 #include "threads/synch.h"
-
+#include "threads/fixed_point_calc.h"
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -110,6 +110,9 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
+    /* Variables used in mlfq-scheduling */
+    int nice;
+    fp_t recent_cpu;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
@@ -118,6 +121,9 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+
+/* external variable used in mlfq-scheduling */
+extern fp_t load_avg; 			/* System's load average */
 
 void thread_init (void);
 void thread_start (void);
@@ -157,4 +163,8 @@ bool compare_priority (const struct list_elem *,
 
 bool need_yield (void);
 
+/* MLFQ Functions */
+void thread_update_priority (struct thread *t)
+void thread_update_recent_cpu (struct thread *t);
+void system_update_load_avg (void);
 #endif /* threads/thread.h */

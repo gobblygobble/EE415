@@ -14,7 +14,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
-
+#include "threads/fixed_point_calc.h"
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -59,6 +59,8 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+/* The System's load_avg */
+fp_t load_avg;
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
@@ -91,6 +93,9 @@ compare_priority (const struct list_elem *a,
   priority_a = thread_get_priority_of (list_entry (a, struct thread, elem));
   priority_b = thread_get_priority_of (list_entry (b, struct thread, elem));
   
+  /* Opposite order if MLFQ-scheduling */
+  if (thread_mlfqs) return (priority_a < priority_b);
+  /* Order in normal manner if not MLFQ-scheduling */
   return (priority_a > priority_b);
 }
 
@@ -375,10 +380,13 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  int origin = thread_current ()->priority;
-  int donated = thread_current ()->donated_priority;
+  if (!thread_mlfqs) {
+    int origin = thread_current ()->priority;
+    int donated = thread_current ()->donated_priority;
 
-  return origin < donated ? donated : origin;
+    return origin < donated ? donated : origin;
+  }
+  return thread_current ()->priority;
 }
 
 int
@@ -398,31 +406,36 @@ thread_get_priority_of (const struct thread *this)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  ASSERT (thread_mlfqs);
+  thread_current ()->nice = nice;
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  ASSERT (thread_mlfqs);
+  return thread_current ()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  ASSERT (thread_mlfqs);
+  fp_t temp_load_avg = multiply_fp_by_int (load_avg, 100);
+  
+  return convert_fp_to_int_round (temp_load_avg);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  ASSERT (thread_mlfqs);
+  fp_t temp_recent_cpu = multiply_fp_by_int (thread_current ()->recent_cpu, 100);
+  
+  return convert_fp_to_int_round (temp_recent_cpu);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -546,6 +559,9 @@ next_thread_to_run (void)
     return idle_thread;
   else {
     list_sort (&ready_list, compare_priority, NULL);
+    /* if MLFQ-scheduling, pop from back */
+    if (thread_mlfqs) return list_entry (list_pop_back (&ready_list), struct thread, elem);
+    /* if not, pop from front as normal */
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }
@@ -645,6 +661,48 @@ need_yield (void)
   return false;
 }
 
+/* Functions for MLFQ */
+
+void
+thread_update_priority (struct thread *t)
+{
+  int nice = t->nice;
+  fp_t rc = t->recent_cpu;
+  fp_t primax = convert_int_to_fp (PRI_MAX);
+  fp_t rc_div4 = divide_fp_by_int (rc, 4);
+  int nice_times2 = nice * 2;
+  fp_t primax_minus_rcdiv4 = subtract_fp_from_fp (primax, rc_div4);
+  fp_t temp_pri_fp = subtract_int_from_fp (nice_times2, primax_minus_rcdiv4);
+  int temp_pri = convert_fp_to_int_trunc (temp_pri_fp);
+  
+  /* priority >= PRI_MIN */
+  int new_pri = temp_pri > PRI_MIN ? temp_pri : PRI_MIN;
+  /* set priority */
+  t->priority = new_pri;
+}
+
+void
+thread_update_recent_cpu (struct thread *t)
+{
+  fp_t old_cpu = t->recent_cpu;
+  int nice = t->nice;
+  fp_t recent_cpu = multiply_fp_by_fp (divide_fp_by_fp (2 * load_avg, (2 * load_avg + 1)), old_cpu);
+  recent_cpu = add_fp_and_int (recent_cpu, nice);
+  t->recent_cpu = recent_cpu;
+}
+
+void
+system_update_load_avg (void)
+{
+  int ready_threads = list_size (&ready_list);
+  if (thread_current () != idle_thread) ready_threads++;
+
+  fp_t load_avg59 = multiply_fp_by_int (load_avg, 59);
+  fp_t part_load_avg = divide_fp_by_int (load_avg59, 60);
+  fp_t part_ready_threads = divide_fp_by_int (ready_threads, 60);
+
+  load_avg = add_fp_and_fp (part_load_avg, part_ready_threads);
+}
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
