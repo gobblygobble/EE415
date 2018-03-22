@@ -48,30 +48,35 @@ By blocking the interrupts, we hope to achieve atomicity in the possibly critica
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
 
-Instead of yielding the thread, we block it, and add it to the sleeping list.
-Thus, we do not busy wait.
-~~~~~
+Because the interrupt handler pops out elements and we want to minimize the time taken doing that,
+we use list_insert_ordered() when we push in elements, so that we can automatically pop elements in interrupt handler. Since pop takes O(1) time, it is much faster than taking O(n) time.
+Thus, we minimize the time taken in the timer interrupt handler.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
-??We block interrupts while possibly accessing, or even dealing with race conditions.
-~~~~~
-??????Mention semaphores & locks?
+When waking up the threads that "need to wake up", we pop using while loop, instead of a plain if statement, so we manage to wake up ALL of the threads that need to wake up.
 
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
 
-~~~~~
+We disable interrupts when we deal with possible race conditions.
+When we're done, we set them to their original interrupt levels, obviously.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
 
-~~~~~
+We figured that we need to be able to distinguish between threads that have been
+blocked by timer_sleep() and ones that have been blocked by different reasons,
+such as waiting on a lock, semaphore, or condition variables.
+Thus we have decided to make another list which stores threads that have been blocked by timer_sleep().
+Also, because the "blocked-by-timer_sleep()" threads have to wake up at a certain time,
+we are able to traverse our sleeping-thread list at each timer_interrupt(),
+without having to check other blocked threads, which would be a waste of time.
 
 			 PRIORITY SCHEDULING
 			 ===================
@@ -131,7 +136,7 @@ Thus, we do not busy wait.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
 
-~~~~~
+We have uploaded a .png file in the repository, through Bitbucket.
 
 ---- ALGORITHMS ----
 
@@ -167,7 +172,17 @@ Lastly, we set the current thread's maximum waiter thread to point to the above 
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
 
-~~~~~
+Our data structure includes "donated_priority" in the thread.
+This is the maximum priority out of all the threads waiting for this thread.
+Keeping this in mind, when lock_release () is called, we first remove the lock from
+lock_list of the thread, and update the max_waiter of the thread.
+Then we call a recursive function donation_rb() (rb stands for roll-back),
+which is a function that updates the lock's holder's max_waiter's priority.
+(When first called, the lock's holder is the current thread.)
+Then we pass the lock's holder's waiting_lock as parameter to another
+donation_rb() function, so it can be called recursively, allowing
+the rest of the process to update the information as much as needed.
+After the first donation_rb () returns, we set the lock's holder to NULL.
 
 ---- SYNCHRONIZATION ----
 
@@ -175,8 +190,8 @@ Lastly, we set the current thread's maximum waiter thread to point to the above 
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
-During the function call and changing the thread_current ()'s priority, a timer interrupt
-~~~~~
+We cannot think of any examples....
+But we do think that any possible race condition could be avoided by using locks.
 
 ---- RATIONALE ----
 
@@ -217,8 +232,9 @@ and messier algorithms in a simpler way.
 	static int f = 1 << 14 : in 17.14 format, f is 2^14.
 @ thread.c / thread.h:
 	fp_t load_avg: the system's load_avg. (extern fp_t load_avg in thread.h)
-	void thread_update_priority (struct thread *t):
-		Updates thread t's priority as required.
+	int thread_update_priority (struct thread *t):
+		Updates thread t's priority as required,
+		and returns (new priority - old priority).
 	void thread_update_recent_cpu (struct thread *t):
 		Updates thread t's recent_cpu as required.
 	void system_update_load_avg (void):
@@ -264,7 +280,7 @@ However, it is worth noting that C will still not run so many times before the
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
 
-~~~~~
+We have not thought about this issue, due to a lack of time.
 
 ---- RATIONALE ----
 
@@ -276,7 +292,7 @@ However, it is worth noting that C will still not run so many times before the
 Our code does not work yet. We haven't had much chance to work on the
 third part of the assignment, because of our obsession to get perfect score
 on the first two parts.
-~~~~~
+Especially the Round-Robin requirement doesn't seem to be met with our design so far.
 
 >> C6: The assignment explains arithmetic for fixed-point math in
 >> detail, but it leaves it open to you to implement it.  Why did you
@@ -309,7 +325,7 @@ It was our first time obtaining such a large chunk of a skeleton code.
 It took a lot of time to understand what certain parts of the codes try to do.
 It feels like dealing with console_locks is the hardest on the first and second
 part of the assignment.
-We did not get the chance to work a lot on the third project.
+We could not get to work a lot on the third part of the project.
 
 >> Did you find that working on a particular part of the assignment gave
 >> you greater insight into some aspect of OS design?
@@ -336,3 +352,5 @@ Not in particular.
 We think the TAs are doing a great job and really appreciate it.
 
 >> Any other comments?
+
+No other comments. Thank you.
