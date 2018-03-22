@@ -560,6 +560,8 @@ active_pd	src/userprog/pagedir.c	/^active_pd (void) $/;"	f	file:
 add_char	src/lib/user/console.c	/^add_char (char c, void *aux_) $/;"	f	file:
 add_file	src/utils/pintos	/^sub add_file {$/;"	s
 add_file	src/utils/pintos_backup	/^sub add_file {$/;"	s
+add_fp_and_fp	src/threads/fixed_point_calc.c	/^add_fp_and_fp (fp_t x, fp_t y)$/;"	f
+add_fp_and_int	src/threads/fixed_point_calc.c	/^add_fp_and_int (fp_t x, int n)$/;"	f
 adj	src/examples/insult.c	/^char *adj[] = { "3", "4", "2", ",", "1" };$/;"	v
 adj1	src/examples/insult.c	/^char *adj1[] =$/;"	v
 adj1Loc	src/examples/insult.c	/^char adj1Loc[] =$/;"	v
@@ -608,7 +610,7 @@ bad_action	src/examples/insult.c	/^char *bad_action[] =$/;"	v
 bad_actionLoc	src/examples/insult.c	/^char bad_actionLoc[] =$/;"	v
 bad_place	src/examples/insult.c	/^char *bad_place[] =$/;"	v
 bad_placeLoc	src/examples/insult.c	/^char bad_placeLoc[] = { 6, 0, 2, 3, 5, 7, 8, 9 };$/;"	v
-barrier	src/threads/synch.h	49;"	d
+barrier	src/threads/synch.h	51;"	d
 base	src/lib/stdio.c	/^    int base;                   \/* Base. *\/$/;"	m	struct:integer_base	file:
 base	src/threads/palloc.c	/^    uint8_t *base;                      \/* Base of pool. *\/$/;"	m	struct:pool	file:
 base_X	src/lib/stdio.c	/^static const struct integer_base base_X = {16, "0123456789ABCDEF", 'X', 4};$/;"	v	typeref:struct:integer_base	file:
@@ -761,9 +763,10 @@ compact_diff	src/tests/Algorithm/Diff.pm	/^sub compact_diff$/;"	s
 compare_bytes	src/tests/lib.c	/^compare_bytes (const void *read_data_, const void *expected_data_, size_t size,$/;"	f
 compare_files	src/tests/tests.pm	/^sub compare_files {$/;"	s
 compare_ints	src/tests/internal/stdlib.c	/^compare_ints (const void *a_, const void *b_) $/;"	f	file:
+compare_max_waiter	src/threads/synch.c	/^compare_max_waiter (const struct list_elem *a,$/;"	f	file:
 compare_output	src/tests/tests.pm	/^sub compare_output {$/;"	s
 compare_priority	src/threads/thread.c	/^compare_priority (const struct list_elem *a,$/;"	f
-compare_priority_wait	src/threads/synch.c	/^compare_priority_wait (const struct list_elem *a,$/;"	f	file:
+compare_priority_sema	src/threads/synch.c	/^compare_priority_sema (const struct list_elem *a,$/;"	f	file:
 compare_thunk	src/lib/stdlib.c	/^compare_thunk (const void *a, const void *b, void *aux) $/;"	f	file:
 compare_wakeup_time	src/devices/timer.c	/^static bool compare_wakeup_time(const struct list_elem *a,$/;"	f	file:
 completion_wait	src/devices/ide.c	/^    struct semaphore completion_wait;   \/* Up'd by interrupt handler. *\/$/;"	m	struct:channel	typeref:struct:channel::semaphore	file:
@@ -783,6 +786,9 @@ console_panic	src/lib/kernel/console.c	/^console_panic (void) $/;"	f
 console_print_stats	src/lib/kernel/console.c	/^console_print_stats (void) $/;"	f
 consume_some_resources	src/tests/userprog/no-vm/multi-oom.c	/^consume_some_resources (void)$/;"	f	file:
 consume_some_resources_and_die	src/tests/userprog/no-vm/multi-oom.c	/^consume_some_resources_and_die (int seed)$/;"	f	file:
+convert_fp_to_int_round	src/threads/fixed_point_calc.c	/^convert_fp_to_int_round (fp_t x)$/;"	f
+convert_fp_to_int_trunc	src/threads/fixed_point_calc.c	/^convert_fp_to_int_trunc (fp_t x)$/;"	f
+convert_int_to_fp	src/threads/fixed_point_calc.c	/^convert_int_to_fp (int n)$/;"	f
 copy_file	src/utils/Pintos.pm	/^sub copy_file {$/;"	s
 copy_string_across_boundary	src/tests/userprog/boundary.c	/^copy_string_across_boundary (const char *src) $/;"	f
 cp_SRC	src/examples/Makefile	/^cp_SRC = cp.c$/;"	m
@@ -836,6 +842,8 @@ dir_reopen	src/filesys/directory.c	/^dir_reopen (struct dir *dir) $/;"	f
 disk_geometry	src/utils/pintos	/^sub disk_geometry {$/;"	s
 disk_geometry	src/utils/pintos_backup	/^sub disk_geometry {$/;"	s
 div_round_up	src/utils/Pintos.pm	/^sub div_round_up {$/;"	s
+divide_fp_by_fp	src/threads/fixed_point_calc.c	/^divide_fp_by_fp (fp_t x, fp_t y)$/;"	f
+divide_fp_by_int	src/threads/fixed_point_calc.c	/^divide_fp_by_int (fp_t x, int n)$/;"	f
 divl	src/lib/arithmetic.c	/^divl (uint64_t n, uint32_t d)$/;"	f	file:
 do_compare	src/lib/stdlib.c	/^do_compare (unsigned char *array, size_t a_idx, size_t b_idx, size_t size,$/;"	f	file:
 do_format	src/filesys/filesys.c	/^do_format (void)$/;"	f	file:
@@ -847,6 +855,7 @@ do_touch	src/tests/filesys/extended/mk-tree.c	/^do_touch (const char *format, ..
 do_write	src/tests/filesys/extended/tar.c	/^do_write (int fd, const char *buffer, int size, bool *write_error) $/;"	f	file:
 donated_priority	src/threads/thread.h	/^    int donated_priority;		\/* not zero when donated *\/$/;"	m	struct:thread
 donation	src/threads/synch.c	/^donation (const struct lock *lock)$/;"	f	file:
+donation_rb	src/threads/synch.c	/^donation_rb (const struct lock *lock)$/;"	f	file:
 donor_thread_func	src/tests/threads/priority-donate-chain.c	/^donor_thread_func (void *locks_) $/;"	f	file:
 donor_thread_func	src/tests/threads/priority-donate-chain.c	/^static thread_func donor_thread_func;$/;"	v	file:
 ds	src/threads/interrupt.h	/^    uint16_t ds, :16;           \/* Saved DS segment register. *\/$/;"	m	struct:intr_frame
@@ -894,6 +903,7 @@ elem	src/filesys/inode.c	/^    struct list_elem elem;              \/* Element i
 elem	src/lib/kernel/hash.h	/^    struct hash_elem *elem;     \/* Current hash element in current bucket. *\/$/;"	m	struct:hash_iterator	typeref:struct:hash_iterator::hash_elem
 elem	src/tests/internal/list.c	/^    struct list_elem elem;      \/* List element. *\/$/;"	m	struct:value	typeref:struct:value::list_elem	file:
 elem	src/threads/synch.c	/^    struct list_elem elem;              \/* List element. *\/$/;"	m	struct:semaphore_elem	typeref:struct:semaphore_elem::list_elem	file:
+elem	src/threads/synch.h	/^    struct list_elem elem;$/;"	m	struct:lock	typeref:struct:lock::list_elem
 elem	src/threads/thread.h	/^    struct list_elem elem;              \/* List element. *\/$/;"	m	struct:thread	typeref:struct:thread::list_elem
 elem_cnt	src/lib/kernel/bitmap.c	/^elem_cnt (size_t bit_cnt)$/;"	f	file:
 elem_cnt	src/lib/kernel/hash.h	/^    size_t elem_cnt;            \/* Number of elements in table. *\/$/;"	m	struct:hash
@@ -922,6 +932,7 @@ expand	src/examples/insult.c	/^expand (int num, char **grammar[], char *location
 expecting_interrupt	src/devices/ide.c	/^    bool expecting_interrupt;   \/* True if an interrupt is expected, false if$/;"	m	struct:channel	file:
 extend_file	src/utils/pintos	/^sub extend_file {$/;"	s
 extend_file	src/utils/pintos_backup	/^sub extend_file {$/;"	s
+f	src/threads/fixed_point_calc.c	/^static int f = 1<<14;\/* static int f = 2^14 in 17.14 format *\/$/;"	v	file:
 fail	src/tests/lib.c	/^fail (const char *format, ...) $/;"	f
 fail	src/tests/tests.pm	/^sub fail {$/;"	s
 fail	src/tests/threads/tests.c	/^fail (const char *format, ...) $/;"	f
@@ -979,6 +990,7 @@ format_filesys	src/threads/init.c	/^static bool format_filesys;$/;"	v	file:
 format_integer	src/lib/stdio.c	/^format_integer (uintmax_t value, bool is_signed, bool negative, $/;"	f	file:
 format_string	src/lib/stdio.c	/^format_string (const char *string, int length,$/;"	f	file:
 found_partition	src/devices/partition.c	/^found_partition (struct block *block, uint8_t part_type,$/;"	f	file:
+fp_t	src/threads/fixed_point_calc.h	/^typedef int fp_t;$/;"	t
 frame_pointer	src/threads/interrupt.h	/^    void *frame_pointer;        \/* Saved EBP (frame pointer). *\/$/;"	m	struct:intr_frame
 free	src/threads/malloc.c	/^free (void *p) $/;"	f
 free_cnt	src/threads/malloc.c	/^    size_t free_cnt;            \/* Free blocks; pages in big block. *\/$/;"	m	struct:arena	file:
@@ -1013,7 +1025,7 @@ get_core_output	src/tests/tests.pm	/^sub get_core_output {$/;"	s
 get_inumber	src/examples/pwd.c	/^get_inumber (const char *file_name, int *inum) $/;"	f	file:
 get_load_average	src/utils/pintos	/^sub get_load_average {$/;"	s
 get_load_average	src/utils/pintos_backup	/^sub get_load_average {$/;"	s
-get_priority_from_list_elem	src/threads/thread.c	/^get_priority_from_list_elem (const struct list_elem *a)$/;"	f	file:
+get_readylist	src/threads/thread.c	/^get_readylist (void)$/;"	f
 get_scratch_file	src/utils/pintos	/^sub get_scratch_file {$/;"	s
 get_scratch_file	src/utils/pintos_backup	/^sub get_scratch_file {$/;"	s
 getcwd	src/examples/pwd.c	/^getcwd (char *cwd, size_t cwd_size) $/;"	f	file:
@@ -1267,6 +1279,7 @@ list_splice	src/lib/kernel/list.c	/^list_splice (struct list_elem *before,$/;"	f
 list_tail	src/lib/kernel/list.c	/^list_tail (struct list *list) $/;"	f
 list_unique	src/lib/kernel/list.c	/^list_unique (struct list *list, struct list *duplicates,$/;"	f
 load	src/userprog/process.c	/^load (const char *file_name, void (**eip) (void), void **esp) $/;"	f
+load_avg	src/threads/thread.c	/^fp_t load_avg;$/;"	v
 load_kernel	src/threads/loader.S	/^load_kernel:$/;"	l
 load_segment	src/userprog/process.c	/^load_segment (struct file *file, off_t ofs, uint8_t *upage,$/;"	f	file:
 load_thread	src/tests/threads/mlfqs-fair.c	/^load_thread (void *ti_) $/;"	f	file:
@@ -1286,6 +1299,7 @@ lock_acquire	src/threads/synch.c	/^lock_acquire (struct lock *lock)$/;"	f
 lock_and_sema	src/tests/threads/priority-donate-sema.c	/^struct lock_and_sema $/;"	s	file:
 lock_held_by_current_thread	src/threads/synch.c	/^lock_held_by_current_thread (const struct lock *lock) $/;"	f
 lock_init	src/threads/synch.c	/^lock_init (struct lock *lock)$/;"	f
+lock_list	src/threads/thread.h	/^    struct list lock_list;$/;"	m	struct:thread	typeref:struct:thread::list
 lock_pair	src/tests/threads/priority-donate-chain.c	/^struct lock_pair$/;"	s	file:
 lock_release	src/threads/synch.c	/^lock_release (struct lock *lock) $/;"	f
 lock_try_acquire	src/threads/synch.c	/^lock_try_acquire (struct lock *lock)$/;"	f
@@ -1364,6 +1378,8 @@ mapid_t	src/lib/user/syscall.h	/^typedef int mapid_t;$/;"	t
 matmult_SRC	src/examples/Makefile	/^matmult_SRC = matmult.c$/;"	m
 max	src/utils/Pintos.pm	/^sub max {$/;"	s
 max_length	src/lib/stdio.c	/^    int max_length;     \/* Max length of output string. *\/$/;"	m	struct:vsnprintf_aux	file:
+max_waiter	src/threads/synch.h	/^    struct thread *max_waiter;$/;"	m	struct:lock	typeref:struct:lock::thread
+max_waiter	src/threads/thread.h	/^    struct thread *max_waiter;$/;"	m	struct:thread	typeref:struct:thread::thread
 mcat_SRC	src/examples/Makefile	/^mcat_SRC = mcat.c$/;"	m
 mcp_SRC	src/examples/Makefile	/^mcp_SRC = mcp.c$/;"	m
 medium_thread_func	src/tests/threads/priority-donate-nest.c	/^medium_thread_func (void *locks_) $/;"	f	file:
@@ -1394,6 +1410,8 @@ move_cursor	src/devices/vga.c	/^move_cursor (void) $/;"	f	file:
 msg	src/tests/lib.c	/^msg (const char *format, ...) $/;"	f
 msg	src/tests/threads/tests.c	/^msg (const char *format, ...) $/;"	f
 mtime	src/lib/ustar.c	/^    char mtime[12];             \/* Modification time in seconds$/;"	m	struct:ustar_header	file:
+multiply_fp_by_fp	src/threads/fixed_point_calc.c	/^multiply_fp_by_fp (fp_t x, fp_t y)$/;"	f
+multiply_fp_by_int	src/threads/fixed_point_calc.c	/^multiply_fp_by_int (fp_t x, int n)$/;"	f
 munmap	src/lib/user/syscall.c	/^munmap (mapid_t mapid)$/;"	f
 name	src/devices/block.c	/^    char name[16];                      \/* Block device name. *\/$/;"	m	struct:block	file:
 name	src/devices/ide.c	/^    char name[8];               \/* Name, e.g. "hda". *\/$/;"	m	struct:ata_disk	file:
@@ -1416,6 +1434,7 @@ next_partition	src/threads/loader.S	/^next_partition:$/;"	l
 next_sector	src/threads/loader.S	/^next_sector:$/;"	l
 next_thread_to_run	src/threads/thread.c	/^next_thread_to_run (void) $/;"	f	file:
 nice	src/tests/threads/mlfqs-fair.c	/^    int nice;$/;"	m	struct:thread_info	file:
+nice	src/threads/thread.h	/^    int nice;$/;"	m	struct:thread
 nlz	src/lib/arithmetic.c	/^nlz (uint32_t x) $/;"	f	file:
 no_boot_partition	src/threads/loader.S	/^no_boot_partition:$/;"	l
 no_such_drive	src/threads/loader.S	/^no_such_drive:$/;"	l
@@ -1593,6 +1612,7 @@ ready_list	src/threads/thread.c	/^static struct list ready_list;$/;"	v	typeref:s
 real_time_delay	src/devices/timer.c	/^real_time_delay (int64_t num, int32_t denom)$/;"	f	file:
 real_time_sleep	src/devices/timer.c	/^real_time_sleep (int64_t num, int32_t denom) $/;"	f	file:
 realloc	src/threads/malloc.c	/^realloc (void *old_block, size_t new_size) $/;"	f
+recent_cpu	src/threads/thread.h	/^    fp_t recent_cpu;$/;"	m	struct:thread
 recursor_SRC	src/examples/Makefile	/^recursor_SRC = recursor.c$/;"	m
 reg_alt_status	src/devices/ide.c	31;"	d	file:
 reg_base	src/devices/ide.c	/^    uint16_t reg_base;          \/* Base I\/O port. *\/$/;"	m	struct:channel	file:
@@ -1779,6 +1799,8 @@ strtok	src/lib/string.h	33;"	d
 strtok_r	src/lib/string.c	/^strtok_r (char *s, const char *delimiters, char **save_ptr) $/;"	f
 stuff	src/examples/insult.c	/^char *stuff[] =$/;"	v
 stuffLoc	src/examples/insult.c	/^char stuffLoc[] = { 14, 0, 1, 3, 4, 5, 6, 8, 10, 11, 12, 13, 14, 15, 17, 18 };$/;"	v
+subtract_fp_from_fp	src/threads/fixed_point_calc.c	/^subtract_fp_from_fp (fp_t x, fp_t y)$/;"	f
+subtract_int_from_fp	src/threads/fixed_point_calc.c	/^subtract_int_from_fp (int n, fp_t x)$/;"	f
 swap	src/lib/kernel/list.c	/^swap (struct list_elem **a, struct list_elem **b) $/;"	f	file:
 swap	src/tests/lib.c	/^swap (void *a_, void *b_, size_t size) $/;"	f	file:
 swap	src/tests/vm/qsort.c	/^swap (unsigned char *a, unsigned char *b) $/;"	f	file:
@@ -1795,6 +1817,7 @@ syscall2	src/lib/user/syscall.c	33;"	d	file:
 syscall3	src/lib/user/syscall.c	49;"	d	file:
 syscall_handler	src/userprog/syscall.c	/^syscall_handler (struct intr_frame *f UNUSED) $/;"	f	file:
 syscall_init	src/userprog/syscall.c	/^syscall_init (void) $/;"	f
+system_update_load_avg	src/threads/thread.c	/^system_update_load_avg (void)$/;"	f
 tail	src/devices/intq.h	/^    int tail;                   \/* Old data is read here. *\/$/;"	m	struct:intq
 tail	src/lib/kernel/list.h	/^    struct list_elem tail;      \/* List tail. *\/$/;"	m	struct:list	typeref:struct:list::list_elem
 tell	src/lib/user/syscall.c	/^tell (int fd) $/;"	f
@@ -1987,6 +2010,8 @@ thread_tick	src/threads/thread.c	/^thread_tick (void) $/;"	f
 thread_ticks	src/threads/thread.c	/^static unsigned thread_ticks;   \/* # of timer ticks since last yield. *\/$/;"	v	file:
 thread_tid	src/threads/thread.c	/^thread_tid (void) $/;"	f
 thread_unblock	src/threads/thread.c	/^thread_unblock (struct thread *t) $/;"	f
+thread_update_priority	src/threads/thread.c	/^thread_update_priority (struct thread *t)$/;"	f
+thread_update_recent_cpu	src/threads/thread.c	/^thread_update_recent_cpu (struct thread *t)$/;"	f
 thread_yield	src/threads/thread.c	/^thread_yield (void) $/;"	f
 threads_SRC	src/threads/build/Makefile	/^threads_SRC  = threads\/start.S		# Startup code.$/;"	m
 tick_count	src/tests/threads/mlfqs-fair.c	/^    int tick_count;$/;"	m	struct:thread_info	file:
@@ -2096,12 +2121,11 @@ wait	src/devices/intq.c	/^wait (struct intq *q UNUSED, struct thread **waiter) $
 wait	src/lib/user/syscall.c	/^wait (pid_t pid)$/;"	f
 wait_children	src/tests/lib.c	/^wait_children (pid_t pids[], size_t child_cnt) $/;"	f
 wait_sema	src/tests/threads/alarm-priority.c	/^static struct semaphore wait_sema;$/;"	v	typeref:struct:semaphore	file:
+wait_thread	src/threads/synch.c	/^    struct thread *wait_thread;$/;"	m	struct:semaphore_elem	typeref:struct:semaphore_elem::thread	file:
 wait_until_idle	src/devices/ide.c	/^wait_until_idle (const struct ata_disk *d) $/;"	f	file:
 wait_while_busy	src/devices/ide.c	/^wait_while_busy (const struct ata_disk *d) $/;"	f	file:
-waitelem	src/threads/thread.h	/^    struct list_elem waitelem;		\/* List element for waiting_list *\/$/;"	m	struct:thread	typeref:struct:thread::list_elem
 waiters	src/threads/synch.h	/^    struct list waiters;        \/* List of waiting threads. *\/$/;"	m	struct:condition	typeref:struct:condition::list
 waiters	src/threads/synch.h	/^    struct list waiters;        \/* List of waiting threads. *\/$/;"	m	struct:semaphore	typeref:struct:semaphore::list
-waiting_list	src/threads/thread.h	/^    struct list waiting_list;		\/* List of threads that wait on this thread *\/$/;"	m	struct:thread	typeref:struct:thread::list
 waiting_lock	src/threads/thread.h	/^    struct lock *waiting_lock;		\/* The lock that it waits for *\/$/;"	m	struct:thread	typeref:struct:thread::lock
 wake_time	src/tests/threads/alarm-priority.c	/^static int64_t wake_time;$/;"	v	file:
 wakeup_time	src/threads/thread.h	/^    int64_t wakeup_time;		\/* time for thread to wake up *\/$/;"	m	struct:thread

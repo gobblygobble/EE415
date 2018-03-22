@@ -203,10 +203,14 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
   // DEBUGGING
-  /*
   if (thread_mlfqs) {
     // Update load_avg if have to
-    if (timer_ticks () % TIMER_FREQ == 0) system_update_load_avg ();
+    if (timer_ticks () % TIMER_FREQ == 0) {
+      // Update load_avg if have to.
+      system_update_load_avg ();
+      // increment recent cpu
+      thread_increment_recent_cpu ();
+    }
     // Traverse through ready_list and update priority & recent_cpu if have to
     struct list *ready_list = get_readylist ();
     struct list_elem *e;
@@ -218,7 +222,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
     list_sort (ready_list, compare_priority, NULL);
     return;
   }
-  */
   struct thread *t;
   if (!list_empty (&sleep_list)) {
     t = list_entry (list_front (&sleep_list), struct thread, sleepelem);

@@ -112,7 +112,8 @@ Thus, we do not busy wait.
 	}
 	explicitly declared @ synch.c:
 		static bool compare_max_waiter (const struct list_elem *a,
-						const struct list_elem *b, void *aux UNUSED):
+						const struct list_elem *b,
+						void *aux UNUSED):
 			compares the values of max_waiters' priorities of the two locks,
 			passed by parameters
 		static void donation (const struct lock *lock):
@@ -121,6 +122,10 @@ Thus, we do not busy wait.
 		static void donation_rb (const struct lock *lock):
 			rolls back the donated_priority to what it would have been.
 			Also a recursive function
+		static bool compare_priority_sema (const struct list_elem *a,
+						   const struct list_elem *b,
+						   void *aux UNUSED):
+			compares the values of two semaphores' waiting threads' priorities.
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
@@ -193,6 +198,36 @@ and messier algorithms in a simpler way.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+@ 2 new files- fixed_point_calc.c / fixed_point_calc.h:
+	typedef int fp_t: typedef- for 4-byte integers (same as normal int)
+			  we used typedef to distinguish between what we see
+			  as real integers, and fixed point numbers.
+	fp_t convert_int_to_fp;
+	int convert_fp_to_int_trunc (fp_t);
+	int convert_fp_to_int_round (fp_t);
+	fp_t add_fp_and_fp (fp_t, fp_t);
+	fp_t subtract_fp_from_fp (fp_t, fp_t);
+	fp_t add_fp_and_int (fp_t, int);
+	fp_t subtract_int_from_fp (int, fp_t);
+	fp_t multiply_fp_by_fp (fp_t, fp_t);
+	fp_t multiply_fp_by_int (fp_t, int);
+	fp_t divied_fp_by_fp (fp_t, fp_t);
+	fp_t divide_fp_by_int (fp_t, int);
+	    =======> These functions' names suggest their roles.
+	static int f = 1 << 14 : in 17.14 format, f is 2^14.
+@ thread.c / thread.h:
+	fp_t load_avg: the system's load_avg. (extern fp_t load_avg in thread.h)
+	void thread_update_priority (struct thread *t):
+		Updates thread t's priority as required.
+	void thread_update_recent_cpu (struct thread *t):
+		Updates thread t's recent_cpu as required.
+	void system_update_load_avg (void):
+		Updates the system's load_avg value.
+	void thread_increment_recent_cpu (void):
+		Increments the current thread's recent_cpu value by 1.
+	struct list* get_readylist (void):
+		Helps us access the static list ready_list.
+
 ---- ALGORITHMS ----
 
 >> C2: Suppose threads A, B, and C have nice values 0, 1, and 2.  Each
@@ -203,23 +238,33 @@ and messier algorithms in a simpler way.
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
-16
-20
-24
-28
-32
-36
+ 0     00  00  00  63  61  59      A
+ 4     01  00  00  62  61  59      A
+ 8     02  00  00  62  61  59      A
+12     03  00  00  62  61  59      A
+16     04  00  00  62  61  59      A
+20     05  00  00  61  61  59      B
+24     05  01  00  61  60  59      A
+28     06  01  00  61  60  59      A
+32     07  01  00  61  60  59      A
+36     08  01  00  61  60  59      A
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behavior of your scheduler?
 
+When two threads have the same priorities, it is ambiguous which one to
+run first. The assignment wanted us to use round-robin algorithm, similar
+to that of a queue (FIFO).
+This way, with the assumption that enough time is given, none of the threads
+will face starvation.
+However, it is worth noting that C will still not run so many times before the
+100-th tick(when other values start to update), due to its high niceness.
+
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
+
+~~~~~
 
 ---- RATIONALE ----
 
@@ -228,12 +273,25 @@ ticks   A   B   C   A   B   C   to run
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
 
+Our code does not work yet. We haven't had much chance to work on the
+third part of the assignment, because of our obsession to get perfect score
+on the first two parts.
+~~~~~
+
 >> C6: The assignment explains arithmetic for fixed-point math in
 >> detail, but it leaves it open to you to implement it.  Why did you
 >> decide to implement it the way you did?  If you created an
 >> abstraction layer for fixed-point math, that is, an abstract data
 >> type and/or a set of functions or macros to manipulate fixed-point
 >> numbers, why did you do so?  If not, why not?
+
+We used typedef to distinguish between what we consider as actual integers,
+and what we consider as fixed point numbers.
+It seems like typedef-ing int as fp_t to denote fixed point numbers make
+our code more readable.
+Also, we gave names for any arithmetic associated with fixed point numbers,
+because the function names were made to be pretty straightforward, and it
+also makes other parts of the codes that use the calculations more readable.
 
 			   SURVEY QUESTIONS
 			   ================
@@ -247,14 +305,34 @@ the quarter.
 >> In your opinion, was this assignment, or any one of the three problems
 >> in it, too easy or too hard?  Did it take too long or too little time?
 
+It was our first time obtaining such a large chunk of a skeleton code.
+It took a lot of time to understand what certain parts of the codes try to do.
+It feels like dealing with console_locks is the hardest on the first and second
+part of the assignment.
+We did not get the chance to work a lot on the third project.
+
 >> Did you find that working on a particular part of the assignment gave
 >> you greater insight into some aspect of OS design?
+
+Yes, it did. It was very hard, but helped us realize that we didn't know
+so much about OS as we thought we had understood during the lectures.
+We think it helps our coding skills improve a lot, along with debugging skills,
+like using gdb.
+However, after a certain time of debugging, and realizing it is usually
+simple typos that take away most of our time in debugging, it made us 
+feel a little helpless, because there's practically not so much we can do
+besides being more careful in the future to prevent such things from
+happening again.
 
 >> Is there some particular fact or hint we should give students in
 >> future quarters to help them solve the problems?  Conversely, did you
 >> find any of our guidance to be misleading?
 
+Not in particular.
+
 >> Do you have any suggestions for the TAs to more effectively assist
 >> students, either for future quarters or the remaining projects?
+
+We think the TAs are doing a great job and really appreciate it.
 
 >> Any other comments?

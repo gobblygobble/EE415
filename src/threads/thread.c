@@ -72,16 +72,6 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-/*
-static int
-get_priority_from_list_elem (const struct list_elem *a)
-{
-  struct thread *this = list_entry (a, struct thread, elem);
-  
-  if (is_thread (this))
-    return thread_get_priority_of (this);
-  return -1;
-}*/
 
 bool
 compare_priority (const struct list_elem *a,
@@ -94,8 +84,8 @@ compare_priority (const struct list_elem *a,
   priority_b = thread_get_priority_of (list_entry (b, struct thread, elem));
    
   //DEBUGGING
-  // Opposite order if MLFQ-scheduling
   /*
+  // Opposite order if MLFQ-scheduling
   if (thread_mlfqs) {
     return (priority_a < priority_b);
   }
@@ -386,11 +376,9 @@ int
 thread_get_priority (void) 
 {
   //DEBUGGING
-  /*
   if (thread_mlfqs) {
     return thread_current ()->priority;
   }
-  */
   int origin = thread_current ()->priority;
   int donated = thread_current ()->donated_priority;
   return origin < donated ? donated : origin;
@@ -567,12 +555,10 @@ next_thread_to_run (void)
   else {
     list_sort (&ready_list, compare_priority, NULL);
     //DEBUGGING
-    /*
     // if MLFQ-scheduling, pop from back
     if (thread_mlfqs) {
       return list_entry (list_pop_back (&ready_list), struct thread, elem);
     }
-    */
     // if not, pop from front as normal
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
@@ -716,6 +702,12 @@ system_update_load_avg (void)
   load_avg = add_fp_and_fp (part_load_avg, part_ready_threads);
 }
 
+void
+thread_increment_recent_cpu (void)
+{
+  fp_t old_cpu = thread_current ()->recent_cpu;
+  thread_current ()->recent_cpu = add_fp_and_int (old_cpu, 1);
+}
 
 struct list*
 get_readylist (void)

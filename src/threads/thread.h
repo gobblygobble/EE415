@@ -96,8 +96,6 @@ struct thread
     int64_t wakeup_time;		/* time for thread to wake up */
     struct lock *waiting_lock;		/* The lock that it waits for */
 
-    //struct list waiting_list;		/* List of threads that wait on this thread */
-    //struct list_elem waitelem;		/* List element for waiting_list */
     struct list lock_list;
     struct thread *max_waiter;
     int donated_priority;		/* not zero when donated */
@@ -167,6 +165,7 @@ bool need_yield (void);
 void thread_update_priority (struct thread *);
 void thread_update_recent_cpu (struct thread *);
 void system_update_load_avg (void);
+void thread_increment_recent_cpu (void);
 
 struct list* get_readylist (void);
 #endif /* threads/thread.h */
