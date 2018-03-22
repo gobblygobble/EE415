@@ -207,7 +207,7 @@ sema_up (struct semaphore *sema)
   }
   sema->value++;
   intr_set_level (old_level);
-  if (need_yield ()) thread_yield ();
+  if (!thread_mlfqs && need_yield ()) thread_yield ();
 }
 
 static void sema_test_helper (void *sema_);
@@ -287,27 +287,15 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  thread_current ()->waiting_lock = lock;
-/* Sorry, we were very stupid
-  if (lock->holder != NULL) {
-    if (thread_get_priority_of (lock->max_waiter) < thread_get_priority ())
-      lock->max_waiter = thread_current ();
-    if (thread_get_priority_of (lock->holder->max_waiter) < thread_get_priority ())
-      lock->holder->max_waiter = thread_current ();
+  if (thread_mlfqs) {
+    sema_down (&lock->semaphore);
+    lock->holder = thread_current ();
+    return ;
   }
-  donation(lock);
-  sema_down (&lock->semaphore);
-  thread_current ()->waiting_lock = NULL;
-  lock->holder = thread_current ();
-  list_insert_ordered (&thread_current ()->lock_list, &lock->elem,
-			compare_max_waiter, NULL);
-  if (thread_get_priority_of (lock->max_waiter) > 
-       thread_get_priority_of (thread_current ()->max_waiter))
-    thread_current ()->max_waiter = lock->max_waiter;
-*/
+  thread_current ()->waiting_lock = lock;
   struct semaphore* sema = &lock->semaphore;
   if (thread_get_priority_of (lock->max_waiter) < thread_get_priority ()) {
-    lock->max_waiter = thread_current ();
+      lock->max_waiter = thread_current ();
     if (lock->holder != NULL && thread_get_priority_of (lock->max_waiter) > thread_get_priority_of (lock->holder->max_waiter)) {
 
       lock->holder->max_waiter = lock->max_waiter;
@@ -357,6 +345,12 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+
+  if (thread_mlfqs) {
+    lock->holder = NULL;
+    sema_up (&lock->semaphore);
+    return ;
+  }
   // remove lock from lock_list
   list_remove (&lock->elem);
   // update max_waiter of curr

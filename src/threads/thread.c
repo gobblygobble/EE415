@@ -22,6 +22,7 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
+
 static struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
@@ -93,6 +94,8 @@ compare_priority (const struct list_elem *a,
   // Order in normal manner if not MLFQ-scheduling
   return (priority_a > priority_b);
 }
+
+
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -403,6 +406,8 @@ thread_set_nice (int nice UNUSED)
 {
   ASSERT (thread_mlfqs);
   thread_current ()->nice = nice;
+  if (thread_update_priority (thread_current ()) < 0);
+    thread_yield ();
 }
 
 /* Returns the current thread's nice value. */
@@ -556,9 +561,9 @@ next_thread_to_run (void)
     list_sort (&ready_list, compare_priority, NULL);
     //DEBUGGING
     // if MLFQ-scheduling, pop from back
-    if (thread_mlfqs) {
-      return list_entry (list_pop_back (&ready_list), struct thread, elem);
-    }
+    //if (thread_mlfqs) {
+    //  return list_entry (list_pop_back (&ready_list), struct thread, elem);
+    //}
     // if not, pop from front as normal
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
@@ -661,9 +666,10 @@ need_yield (void)
 
 /* Functions for MLFQ */
 
-void
+int
 thread_update_priority (struct thread *t)
 {
+  int old_pri = thread_get_priority_of (t);
   int nice = t->nice;
   fp_t rc = t->recent_cpu;
   fp_t primax = convert_int_to_fp (PRI_MAX);
@@ -677,6 +683,8 @@ thread_update_priority (struct thread *t)
   int new_pri = temp_pri > PRI_MIN ? temp_pri : PRI_MIN;
   /* set priority */
   t->priority = new_pri;
+
+  return new_pri - old_pri;
 }
 
 void
@@ -694,10 +702,11 @@ system_update_load_avg (void)
 {
   int ready_threads = list_size (&ready_list);
   if (thread_current () != idle_thread) ready_threads++;
+  fp_t ready_threads_fp = convert_int_to_fp (ready_threads);
 
   fp_t load_avg59 = multiply_fp_by_int (load_avg, 59);
   fp_t part_load_avg = divide_fp_by_int (load_avg59, 60);
-  fp_t part_ready_threads = divide_fp_by_int (ready_threads, 60);
+  fp_t part_ready_threads = divide_fp_by_int (ready_threads_fp, 60);
 
   load_avg = add_fp_and_fp (part_load_avg, part_ready_threads);
 }
