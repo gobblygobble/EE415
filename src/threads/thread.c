@@ -92,10 +92,15 @@ compare_priority (const struct list_elem *a,
 
   priority_a = thread_get_priority_of (list_entry (a, struct thread, elem));
   priority_b = thread_get_priority_of (list_entry (b, struct thread, elem));
-  
-  /* Opposite order if MLFQ-scheduling */
-  if (thread_mlfqs) return (priority_a < priority_b);
-  /* Order in normal manner if not MLFQ-scheduling */
+   
+  //DEBUGGING
+  // Opposite order if MLFQ-scheduling
+  /*
+  if (thread_mlfqs) {
+    return (priority_a < priority_b);
+  }
+  */
+  // Order in normal manner if not MLFQ-scheduling
   return (priority_a > priority_b);
 }
 
@@ -380,13 +385,15 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  if (!thread_mlfqs) {
-    int origin = thread_current ()->priority;
-    int donated = thread_current ()->donated_priority;
-
-    return origin < donated ? donated : origin;
+  //DEBUGGING
+  /*
+  if (thread_mlfqs) {
+    return thread_current ()->priority;
   }
-  return thread_current ()->priority;
+  */
+  int origin = thread_current ()->priority;
+  int donated = thread_current ()->donated_priority;
+  return origin < donated ? donated : origin;
 }
 
 int
@@ -559,9 +566,14 @@ next_thread_to_run (void)
     return idle_thread;
   else {
     list_sort (&ready_list, compare_priority, NULL);
-    /* if MLFQ-scheduling, pop from back */
-    if (thread_mlfqs) return list_entry (list_pop_back (&ready_list), struct thread, elem);
-    /* if not, pop from front as normal */
+    //DEBUGGING
+    /*
+    // if MLFQ-scheduling, pop from back
+    if (thread_mlfqs) {
+      return list_entry (list_pop_back (&ready_list), struct thread, elem);
+    }
+    */
+    // if not, pop from front as normal
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }
