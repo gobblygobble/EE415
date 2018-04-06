@@ -34,14 +34,16 @@ process_execute (const char *file_name)
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  if (fn_copy == NULL) {
+    //print_before_exit (file_name, TID_ERROR);
     return TID_ERROR;
+  }
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
   return tid;
 }
 
@@ -221,6 +223,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  /* Parse file_name */
+  char *save_ptr;
+  char *end_ptr = file_name + strlen (file_name) - 1;
+  strtok_r (file_name, " ", &save_ptr);
+  while (strtok_r (NULL, " ", &save_ptr));
+  while (*file_name == NULL) file_name++;
+
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
@@ -305,6 +314,57 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp))
     goto done;
 
+  /* push arguments into stack */
+  int argc = 1; // because file_name counts as one argument.
+  char *walk = end_ptr;
+
+  while (walk != file_name) {
+    /* skip all NULL */
+    while (*walk == NULL) walk--;
+    /* move walk to beginning of this chunk */
+    while (*walk != NULL && walk != file_name) walk--;
+    /* move to beginning of chunk */
+    if (*walk == NULL) walk++;
+    /* push this chunk into stack */
+    int size = strlen(walk) + 1;
+    *esp -= size;
+    strcpy (*esp, walk);
+    argc++;
+  }
+  /* word align */
+  while (*esp & 3) {
+    *esp -= 1;
+    **esp = (uint8_t)0;
+  }
+  walk = end_ptr;
+  /* push argv[argc] = 0 */
+  *esp -= 4;
+  **esp = 0;
+  void **temp_esp;
+  *temp_esp = PHYS_BASE;
+  int how_many_pushes = 0;
+  while (walk != file_name) {
+    /* skip all NULL */
+    while (*walk == NULL) walk--;
+    /* move walk to beginning of this chunk */
+    while (*walk != NULL && walk != file_name) walk--;
+    /* move to beginning of chunk */
+    if (*walk == NULL) walk++;
+    int size = strlen(walk) + 1;
+    *temp_esp -= size;
+    *esp -= 4; // assume pointer = 4 bytes
+    **esp = *temp_esp;
+    how_many_pushes++;
+  }
+  
+  ASSERT (argc == how_many_pushes);
+  
+  /* push argv */
+  *esp -= 4;
+  **esp = *esp + 4;
+  /* push argc */
+  *esp -= 4;
+  **esp = argc;
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
@@ -462,4 +522,14 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+/* changes */
+
+void
+print_before_exit (const char *file_name, int exit_code)
+{
+  /* Function called before returning in process_execute () */
+  printf ("%s: exit(%d)\n", file_name, exit_code);
+  return;
 }
