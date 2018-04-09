@@ -406,7 +406,7 @@ thread_set_nice (int nice UNUSED)
 {
   ASSERT (thread_mlfqs);
   thread_current ()->nice = nice;
-  if (thread_update_priority (thread_current ()) < 0);
+  if (thread_update_priority (thread_current ()) < 0)
     thread_yield ();
 }
 
@@ -527,6 +527,11 @@ init_thread (struct thread *t, const char *name, int priority)
 
   list_init(&t->lock_list);
 
+#ifdef USERPROG
+  list_init(&t->child_list);
+  sema_init (&t->parent_sema, 0);
+  sema_init (&t->loaded, 0);
+#endif
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -722,6 +727,39 @@ struct list*
 get_readylist (void)
 {
   return &ready_list;
+}
+
+struct list*
+get_childlist (void) 
+{
+  return &(thread_current ()->child_list);
+}
+
+struct child*
+get_child_from_tid (tid_t child_tid)
+{
+  struct list *child_list = get_childlist ();
+  struct list_elem *e;
+
+  for (e = list_begin (child_list); e != list_end (child_list); e = list_next (e)) {
+    struct child *ch = list_entry (e, struct child, elem);
+    if (ch->child_tid == child_tid)
+      return ch;
+  }
+  return NULL;
+}
+
+struct thread*
+get_thread_from_tid (tid_t tid)
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)) {
+    struct thread *t = list_entry (e, struct thread, allelem);
+    if (t->tid == tid)
+      return t;
+  }
+  return NULL;
 }
 
 /* Offset of `stack' member within `struct thread'.

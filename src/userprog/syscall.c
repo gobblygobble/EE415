@@ -5,6 +5,7 @@
 #include "filesys/file.h"
 #include "filesys/inode.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -21,6 +22,7 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  lock_init (&filelock);
 }
 
 static void
@@ -103,8 +105,6 @@ syscall_handler (struct intr_frame *f)
       close ((int)arg0);
       break;
   }
-
-  thread_exit ();
 }
 
 void
@@ -116,34 +116,27 @@ halt (void)
 void
 exit (int status)
 {
-  //struct thread *t = pg_round_down (f_->esp);
-  struct thread *t = thread_current ();
-  uint32_t *pd = t->pagedir;
-  if (pd != NULL)
-  {
-    t->pagedir = NULL;
-    pagedir_activate (NULL);
-    pagedir_destroy (pd);
-  }
+  struct thread *cur = thread_current ();
+
+  /* wait until parent info is set */
+  sema_down (&cur->parent_sema);
+
+  struct child *ch = &cur->child_info;
+
+  ASSERT (ch->child_tid == cur->tid);
+
+  ch->status = status;
+  sema_up (&ch->sema);
+
+  thread_exit ();
 }
 
 pid_t
 exec (const char *cmd_line)
 {
   //struct thread *t = pg_round_down (f_->esp);
-  struct thread *t = thread_current ();
   tid_t child = process_execute (cmd_line);
 
-  if (child != -1) {
-  /* successful process_execute () */
-    int i = 0;
-    while (i < MAX_CHILD) {
-      if (t->tid_table[i] == 0) break;
-      i++;
-    }
-    ASSERT (i < MAX_CHILD);
-    t->tid_table[i] = child;
-  }
   return (pid_t)child;
 }
 
@@ -217,6 +210,7 @@ read (int fd, void *buffer, unsigned size)
   //struct thread *t = pg_round_down (f_->esp);
   struct thread *t = thread_current ();
   unsigned read_cnt = 0;
+
   lock_acquire (&filelock);
   if (fd == 0) {
     while (read_cnt <= size) {
@@ -299,5 +293,4 @@ close (int fd)
   lock_release (&filelock);
   t->fd_table[fd] = NULL;
 }
-
 

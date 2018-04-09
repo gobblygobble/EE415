@@ -29,7 +29,13 @@ typedef int tid_t;
 #ifdef USERPROG
 
 #define MAX_FD 128			/* Maximum number of opened files */
-#define MAX_CHILD 128			/* Maximum number of children per parent */
+
+struct child {
+  tid_t child_tid;
+  struct list_elem elem;
+  struct semaphore sema;
+  int status;
+};
 
 #endif
 
@@ -114,7 +120,11 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct file *fd_table[MAX_FD];	/* file descriptor table */
-    tid_t tid_table[MAX_CHILD];		/* array of children  */
+    struct thread *parent_t;		/* parent thread */
+    struct semaphore parent_sema;	/* semaphore for parent info */
+    struct semaphore loaded;
+    struct list child_list;		/* list of struct child */
+    struct child child_info;
 #endif
 
     /* Variables used in mlfq-scheduling */
@@ -177,4 +187,11 @@ void system_update_load_avg (void);
 void thread_increment_recent_cpu (void);
 
 struct list* get_readylist (void);
+
+#ifdef USERPROG
+struct list* get_childlist (void);
+struct child *get_child_from_tid (tid_t);
+struct thread *get_thread_from_tid (tid_t);
+#endif
+
 #endif /* threads/thread.h */

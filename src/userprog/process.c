@@ -18,8 +18,10 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#define MAX_ARGS 128
+
 static thread_func start_process NO_RETURN;
-static bool load (char *cmdline, void (**eip) (void), void **esp);
+static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -44,6 +46,26 @@ process_execute (const char *file_name)
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+
+  struct thread *t = thread_current ();
+  struct thread *ch_t;
+  struct child *child_info;
+
+  if (tid != -1) {
+    ch_t = get_thread_from_tid (tid);
+    ASSERT (ch_t != NULL);
+    ch_t->parent_t = t;
+
+    child_info = &ch_t->child_info;
+    child_info->child_tid = tid;
+    list_push_front (&(thread_current ()->child_list), &child_info->elem);
+    sema_init (&child_info->sema, 0);
+    child_info->status = -1;
+
+    sema_up(&ch_t->parent_sema);
+
+    sema_down (&ch_t->loaded);
+  }
   return tid;
 }
 
@@ -55,6 +77,15 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  char *args[MAX_ARGS];
+
+  /* Parse file_name */
+  char *save_ptr;
+  int argc = 0;
+
+  file_name = strtok_r (file_name, " ", &save_ptr);
+  args[argc] = file_name;
+  while ((args[++argc] = strtok_r (NULL, " ", &save_ptr)) != NULL);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -62,6 +93,42 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
+  if (success)
+    sema_up (&(thread_current ()->loaded));
+
+  /* push arguments into stack */
+  for (int i = argc - 1; i >= 0; i--) {
+    if_.esp -= strlen (args[i]) + 1;
+    strlcpy (if_.esp, args[i], strlen (args[i]) + 1);
+    args[i] = if_.esp;
+  }
+
+  /* word align */
+  while ((uint32_t)if_.esp & 3) { /* remainder when divided by 4 should be zero */
+    if_.esp -= 1;
+    *(uint8_t *)if_.esp = (uint8_t)0;
+  }
+
+  /* push argv[] */
+  if_.esp -= 4;
+  *(char **)if_.esp = (char *)0;
+  for (int i = argc - 1; i >= 0; i--) {
+    if_.esp -= 4;
+    *(char **)if_.esp = args[i];
+  }
+  
+  /* push argv */
+  if_.esp -= 4;
+  *(char ***)if_.esp = (char **)(if_.esp + 4);
+
+  /* push argc */
+  if_.esp -= 4;
+  *(int *)if_.esp = argc;
+
+  /* push fake return address */
+  if_.esp -= 4;
+  *(void **)if_.esp = (void  *)0;
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -88,10 +155,16 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  while (1) ;
-  return -1;
+  struct thread *child_t = get_thread_from_tid (child_tid);
+  if (get_child_from_tid (child_tid) == NULL || child_t == NULL) {
+    return -1;
+  }
+  
+  struct child *child_info = get_child_from_tid (child_tid);
+  sema_down (&child_info->sema);
+  return child_info->status;
 }
 
 /* Free the current process's resources. */
@@ -209,7 +282,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (char *file_name, void (**eip) (void), void **esp) 
+load (const char *file_name, void (**eip) (void), void **esp) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -223,14 +296,6 @@ load (char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
-  /* Parse file_name */
-  char *save_ptr;
-  char *end_ptr = file_name + strlen (file_name) - 1;
-  //char *end_ptr = file_name + sizeof (file_name);
-  strtok_r (file_name, " ", &save_ptr);
-  while (strtok_r (NULL, " ", &save_ptr));
-  while (*file_name == '\0') file_name++;
 
   /* Open executable file. */
   file = filesys_open (file_name);
@@ -316,63 +381,6 @@ load (char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp))
     goto done;
 
-  /* push arguments into stack */
-  int argc = 0;
-  char *walk = end_ptr;
-
-  while (walk != file_name) {
-    /* skip all NULL */
-    while (*walk == '\0') walk--;
-    /* move walk to beginning of this chunk */
-    while (*walk != '\0' && walk != file_name) walk--;
-    /* move to beginning of chunk */
-    if (*walk == '\0') walk++;
-    /* push this chunk into stack */
-    int size = strlen(walk) + 1;
-    //int size = sizeof (walk);
-    *(char **)esp -= size;
-    strlcpy (*esp, walk, size);
-    argc++;
-    walk--;
-  }
-  /* word align */
-  while ((int)(*esp) & 3) {
-    *(char **)esp -= 1;
-    *(uint8_t *)(*esp) = (uint8_t)0;
-  }
-  walk = end_ptr;
-  /* push argv[argc] = 0 */
-  *(char **)esp -= 4;
-  *(uint32_t *)(*esp) = 0;
-
-  void *temp_esp;
-  temp_esp = PHYS_BASE;
-  int how_many_pushes = 0;
-
-  while (walk != file_name) {
-    /* skip all NULL */
-    while (*walk == '\0') walk--;
-    /* move walk to beginning of this chunk */
-    while (*walk != '\0' && walk != file_name) walk--;
-    /* move to beginning of chunk */
-    if (*walk == '\0') walk++;
-    int size = strlen(walk) + 1;
-    //int size = sizeof (walk);
-    temp_esp = (void *)((char *)temp_esp - size);
-    *(char **)esp -= 4; // assume pointer = 4 bytes
-    *(uint32_t *)(*esp) = (uint32_t)temp_esp;
-    how_many_pushes++;
-    walk--;
-  }
-  
-  ASSERT (argc == how_many_pushes);
-  
-  /* push argv */
-  *(char **)esp -= 4;
-  *(uint32_t *)(*esp) = (uint32_t)((char *)(*esp) + 4);
-  /* push argc */
-  *(char **)esp -= 4;
-  *(int *)(*esp) = argc;
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
