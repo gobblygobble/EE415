@@ -1,15 +1,21 @@
 #include "userprog/syscall.h"
-#include "userprog/file.h"
-#include "userprog/filesys.h"
+#include "userprog/pagedir.h"
+#include "userprog/process.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "filesys/inode.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "threads/sync.h"
+#include "threads/synch.h"
+#include <stdbool.h>
+#include "devices/shutdown.h"
+#include "devices/input.h"
 
 static void syscall_handler (struct intr_frame *);
-static struct intr_frame *f_
+static struct lock filelock;
 
 void
 syscall_init (void) 
@@ -21,7 +27,6 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   /* retrieve syscall number from intr_frame */
-  f_ = f;
   int syscall_num = *((int *)(f->esp));
   uint32_t arg0, arg1, arg2;
 
@@ -32,51 +37,70 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_EXIT:
-      exit ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      exit ((int)arg0);
+      (f->eax) = (int)arg0;
       break;
 
     case SYS_EXEC:
-      exec ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      (f->eax) = exec ((char *)arg0);
       break;
 
     case SYS_WAIT:
-      wait ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      (f->eax) = wait ((pid_t)arg0);
       break;
 
     case SYS_CREATE:
-      create ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      arg1 = *(uint32_t *)(f->esp + 8);
+      (f->eax) = create ((char *)arg0, (unsigned)arg1);
       break;
 
     case SYS_REMOVE:
-      remove ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      (f->eax) = remove ((char *)arg0);
       break;
 
     case SYS_OPEN:
-      open ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      (f->eax) = open ((char *)arg0);
       break;
 
     case SYS_FILESIZE:
-      filesize ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      (f->eax) = filesize ((int)arg0);
       break;
 
     case SYS_READ:
-      read ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      arg1 = *(uint32_t *)(f->esp + 8);
+      arg2 = *(uint32_t *)(f->esp + 12);
+      (f->eax) = read ((int)arg0, (void *)arg1, (unsigned)arg2);
       break;
 
     case SYS_WRITE:
-      write ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      arg1 = *(uint32_t *)(f->esp + 8);
+      arg2 = *(uint32_t *)(f->esp + 12);
+      (f->eax) = write ((int)arg0, (void *)arg1, (unsigned)arg2);
       break;
 
-    case SYS_SEEK:
-      seek ();
+    case SYS_SEEK:  
+      arg0 = *(uint32_t *)(f->esp + 4);
+      arg1 = *(uint32_t *)(f->esp + 8);
+      seek ((int)arg0, (unsigned)arg1);
       break;
 
     case SYS_TELL:
-      tell ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      (f->eax) = tell ((int)arg0);
       break;
 
     case SYS_CLOSE:
-      close ();
+      arg0 = *(uint32_t *)(f->esp + 4);
+      close ((int)arg0);
       break;
   }
 
@@ -92,7 +116,8 @@ halt (void)
 void
 exit (int status)
 {
-  struct thread *t = pg_round_down (f_->esp);
+  //struct thread *t = pg_round_down (f_->esp);
+  struct thread *t = thread_current ();
   uint32_t *pd = t->pagedir;
   if (pd != NULL)
   {
@@ -100,38 +125,60 @@ exit (int status)
     pagedir_activate (NULL);
     pagedir_destroy (pd);
   }
-  (f_->eax) = status;
 }
 
 pid_t
 exec (const char *cmd_line)
 {
-  ;
+  //struct thread *t = pg_round_down (f_->esp);
+  struct thread *t = thread_current ();
+  tid_t child = process_execute (cmd_line);
+
+  if (child != -1) {
+  /* successful process_execute () */
+    int i = 0;
+    while (i < MAX_CHILD) {
+      if (t->tid_table[i] == 0) break;
+      i++;
+    }
+    ASSERT (i < MAX_CHILD);
+    t->tid_table[i] = child;
+  }
+  return (pid_t)child;
 }
 
 int
 wait (pid_t pid)
 {
-  ;
+  return process_wait (pid);
 }
 
 bool
 create (const char *file, unsigned initial_size)
 {
-  ;
+  lock_acquire (&filelock);
+  bool success = filesys_create (file, initial_size);
+  lock_release (&filelock);
+  return success;
 }
 
 bool
 remove (const char *file)
 {
+  lock_acquire (&filelock);
   bool success = filesys_remove (file);
+  lock_release (&filelock);
+  return success;
 }
 
 int
 open (const char *file)
 {
+  lock_acquire (&filelock);
   struct file *opened_file = filesys_open (file);
-  struct thread *t = pg_round_down (f_->esp);
+  lock_release (&filelock);
+  //struct thread *t = pg_round_down (f_->esp);
+  struct thread *t = thread_current ();
   int fd;
 
   /* find empty entry in fd_table */
@@ -140,110 +187,116 @@ open (const char *file)
   }
   if (fd == MAX_FD) {
     /* fd_table is full */
-    (f_->eax) = -1;
+    return -1;
   }
   else {
     t->fd_table[fd] = opened_file;
-    (f_->eax) = fd;
+    return fd;
   }
-
 }
 
 int
 filesize (int fd)
 {
-  struct thread *t = pg_round_down (f_->esp);
+  //struct thread *t = pg_round_down (f_->esp);
+  struct thread *t = thread_current ();
   struct file *opened_file = t->fd_table[fd];
+  int length;
 
-  int length = ((opened_file->inode)->data).length;
-  (f_->eax) = length;
+  lock_acquire (&filelock);
+  length = file_length (opened_file);
+  lock_release (&filelock);
+
+  return length;
 }
 
 int
 read (int fd, void *buffer, unsigned size)
 {
-  struct lock read_lock;
   struct file *file;
-  struct thread *t = pg_round_down (f_->esp);
-  int read_cnt = 0;
-
+  //struct thread *t = pg_round_down (f_->esp);
+  struct thread *t = thread_current ();
+  unsigned read_cnt = 0;
+  lock_acquire (&filelock);
   if (fd == 0) {
-    lock_acquire (&read_lock);
     while (read_cnt <= size) {
       /* read key by input_getc() and write it into buffer at appropriate position */
-      *(buffer + read_cnt++) = input_getc ();
+      *(char *)(buffer + read_cnt++) = input_getc ();
     }
-    lock_release (&read_lock);
-    (f_->eax) = read_cnt;
-    return;
+    lock_release (&filelock);
+    return read_cnt;
   }
 
   /* get file from fd */
   file = t->fd_table[fd];
-
-  lock_acquire (&read_lock);
-  (f_->eax) = file_read (file, buffer, size);
-  lock_release (&read_lock);
+  read_cnt = file_read (file, buffer, size);
+  lock_release (&filelock);
+  return (int)read_cnt;
 }
 
 int
 write (int fd, const void *buffer, unsigned size)
 {
-  struct lock write_lock;
   struct file *file;
-  struct thread *t = pg_round_down (f_->esp);
-
+  //struct thread *t = pg_round_down (f_->esp);
+  struct thread *t = thread_current ();
+  int write_cnt = size;
+  
+  lock_acquire (&filelock);
   if (fd == 1) {
-    lock_acquire (&write_lock);
     putbuf (buffer, size);
-    lock_release (&write_lock);
-    (f_->eax) = size;
-    return;
+    lock_release (&filelock);
+    return write_cnt;
   }
 
   /* get file from fd */
   file = t->fd_table[fd];
 
-  /* acquire write_lock */
-  lock_acquire (&write_lock);
-  (f_->eax) = file_write (file, buffer, size);
-  lock_release (&write_lock);
+  write_cnt = file_write (file, buffer, size);
+  lock_release (&filelock);
+  return write_cnt;
 }
 
 void
 seek (int fd, unsigned position)
 {
-  struct thread *t = pg_round_down (f_->esp);
+  //struct thread *t = pg_round_down (f_->esp);
+  struct thread *t = thread_current ();
   struct file *opened_file = t->fd_table[fd];
-
-  opened_file->pos = (int32_t)position;
+  
+  lock_acquire (&filelock);
+  file_seek (opened_file, position);
+  lock_release (&filelock);
 }
 
 unsigned
 tell (int fd)
 {
-  struct thread *t = pg_round_down (f_->esp);
+  //struct thread *t = pg_round_down (f_->esp);
+  struct thread *t = thread_current ();
   struct file *opened_file = t->fd_table[fd];
- 
-  int next = opened_file->pos + 1;
+  int next;
+  
+  lock_acquire (&filelock);
+  next = file_tell (opened_file);
+  lock_release (&filelock);
 
-  ASSERT (next >= 0);
-
-  unsigned next_u = (unsigned) next;
-  (f_->eax) = next_u;
+  return (unsigned) next;
 }
 
 void
 close (int fd)
 {
-  struct thread *t = pg_round_down (f_->esp);
+  //struct thread *t = pg_round_down (f_->esp);
+  struct thread *t = thread_current ();
   struct file *opened_file = t->fd_table[fd];  
 
   if (fd == 0 || fd == 1) {
     return;
   }
-
+  lock_acquire (&filelock);
   file_close (opened_file);
+  lock_release (&filelock);
   t->fd_table[fd] = NULL;
 }
 

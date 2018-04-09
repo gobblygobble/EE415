@@ -28,7 +28,8 @@ typedef int tid_t;
 
 #ifdef USERPROG
 
-#define MAX_FD 128			/* Maximum number of opend files */
+#define MAX_FD 128			/* Maximum number of opened files */
+#define MAX_CHILD 128			/* Maximum number of children per parent */
 
 #endif
 
@@ -112,7 +113,8 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct file* fd_table[MAX_FD];	/* file descriptor table */
+    struct file *fd_table[MAX_FD];	/* file descriptor table */
+    tid_t tid_table[MAX_CHILD];		/* array of children  */
 #endif
 
     /* Variables used in mlfq-scheduling */

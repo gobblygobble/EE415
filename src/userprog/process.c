@@ -19,7 +19,7 @@
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static bool load (char *cmdline, void (**eip) (void), void **esp);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -90,6 +90,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while (1) ;
   return -1;
 }
 
@@ -208,7 +209,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (char *file_name, void (**eip) (void), void **esp) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -226,9 +227,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Parse file_name */
   char *save_ptr;
   char *end_ptr = file_name + strlen (file_name) - 1;
+  //char *end_ptr = file_name + sizeof (file_name);
   strtok_r (file_name, " ", &save_ptr);
   while (strtok_r (NULL, " ", &save_ptr));
-  while (*file_name == NULL) file_name++;
+  while (*file_name == '\0') file_name++;
 
   /* Open executable file. */
   file = filesys_open (file_name);
@@ -315,56 +317,62 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
 
   /* push arguments into stack */
-  int argc = 1; // because file_name counts as one argument.
+  int argc = 0;
   char *walk = end_ptr;
 
   while (walk != file_name) {
     /* skip all NULL */
-    while (*walk == NULL) walk--;
+    while (*walk == '\0') walk--;
     /* move walk to beginning of this chunk */
-    while (*walk != NULL && walk != file_name) walk--;
+    while (*walk != '\0' && walk != file_name) walk--;
     /* move to beginning of chunk */
-    if (*walk == NULL) walk++;
+    if (*walk == '\0') walk++;
     /* push this chunk into stack */
     int size = strlen(walk) + 1;
-    *esp -= size;
-    strcpy (*esp, walk);
+    //int size = sizeof (walk);
+    *(char **)esp -= size;
+    strlcpy (*esp, walk, size);
     argc++;
+    walk--;
   }
   /* word align */
-  while (*esp & 3) {
-    *esp -= 1;
-    **esp = (uint8_t)0;
+  while ((int)(*esp) & 3) {
+    *(char **)esp -= 1;
+    *(uint8_t *)(*esp) = (uint8_t)0;
   }
   walk = end_ptr;
   /* push argv[argc] = 0 */
-  *esp -= 4;
-  **esp = 0;
-  void **temp_esp;
-  *temp_esp = PHYS_BASE;
+  *(char **)esp -= 4;
+  *(uint32_t *)(*esp) = 0;
+
+  void *temp_esp;
+  temp_esp = PHYS_BASE;
   int how_many_pushes = 0;
+
   while (walk != file_name) {
     /* skip all NULL */
-    while (*walk == NULL) walk--;
+    while (*walk == '\0') walk--;
     /* move walk to beginning of this chunk */
-    while (*walk != NULL && walk != file_name) walk--;
+    while (*walk != '\0' && walk != file_name) walk--;
     /* move to beginning of chunk */
-    if (*walk == NULL) walk++;
+    if (*walk == '\0') walk++;
     int size = strlen(walk) + 1;
-    *temp_esp -= size;
-    *esp -= 4; // assume pointer = 4 bytes
-    **esp = *temp_esp;
+    //int size = sizeof (walk);
+    temp_esp = (void *)((char *)temp_esp - size);
+    *(char **)esp -= 4; // assume pointer = 4 bytes
+    *(uint32_t *)(*esp) = (uint32_t)temp_esp;
     how_many_pushes++;
+    walk--;
   }
   
   ASSERT (argc == how_many_pushes);
   
   /* push argv */
-  *esp -= 4;
-  **esp = *esp + 4;
+  *(char **)esp -= 4;
+  *(uint32_t *)(*esp) = (uint32_t)((char *)(*esp) + 4);
   /* push argc */
-  *esp -= 4;
-  **esp = argc;
+  *(char **)esp -= 4;
+  *(int *)(*esp) = argc;
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
