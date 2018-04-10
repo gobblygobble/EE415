@@ -30,6 +30,7 @@ typedef int tid_t;
 
 struct child {
   tid_t child_tid;
+  char child_name[16];
   struct list_elem elem;
   struct semaphore sema;
   int status;
@@ -110,9 +111,10 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct file *fd_table[MAX_FD];	/* file descriptor table */
-    struct thread *parent_t;		/* parent thread */
+    tid_t parent_tid;			/* parent thread's tid */
     struct semaphore parent_sema;	/* semaphore for parent info */
-    struct semaphore loaded;
+    struct semaphore loaded_sema;
+    bool loaded;
     struct list child_list;		/* list of struct child */
     struct child child_info;
 #endif

@@ -8,7 +8,4 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 
-/* changes */
-void print_before_exit (const char *file_name, tid_t tid);
-
 #endif /* userprog/process.h */

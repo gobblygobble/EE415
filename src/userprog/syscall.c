@@ -15,8 +15,21 @@
 #include "devices/shutdown.h"
 #include "devices/input.h"
 
+#define USER_LOWER_BOUND 0x08048000
+
 static void syscall_handler (struct intr_frame *);
 static struct lock filelock;
+
+static void
+is_valid_ptr (const void *ptr)
+{
+  if (!(is_user_vaddr (ptr) && ptr > (void *)USER_LOWER_BOUND)) {
+    exit (-1);
+  }
+  if (pagedir_get_page (thread_current ()->pagedir, ptr) == NULL) {
+    exit (-1);
+  }
+}
 
 void
 syscall_init (void) 
@@ -29,6 +42,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   /* retrieve syscall number from intr_frame */
+  is_valid_ptr (f->esp);
   int syscall_num = *((int *)(f->esp));
   uint32_t arg0, arg1, arg2;
 
@@ -39,68 +53,86 @@ syscall_handler (struct intr_frame *f)
       break;
 
     case SYS_EXIT:
+      is_valid_ptr (f->esp + 4);
       arg0 = *(uint32_t *)(f->esp + 4);
       exit ((int)arg0);
       (f->eax) = (int)arg0;
       break;
 
     case SYS_EXEC:
+      is_valid_ptr (f->esp + 4);
       arg0 = *(uint32_t *)(f->esp + 4);
+      is_valid_ptr ((void *)arg0);
       (f->eax) = exec ((char *)arg0);
       break;
 
     case SYS_WAIT:
+      is_valid_ptr (f->esp + 4);
       arg0 = *(uint32_t *)(f->esp + 4);
       (f->eax) = wait ((pid_t)arg0);
       break;
 
     case SYS_CREATE:
+      is_valid_ptr (f->esp + 8);
       arg0 = *(uint32_t *)(f->esp + 4);
       arg1 = *(uint32_t *)(f->esp + 8);
+      is_valid_ptr ((void *)arg0);
       (f->eax) = create ((char *)arg0, (unsigned)arg1);
       break;
 
     case SYS_REMOVE:
+      is_valid_ptr (f->esp + 4);
       arg0 = *(uint32_t *)(f->esp + 4);
+      is_valid_ptr ((void *)arg0);
       (f->eax) = remove ((char *)arg0);
       break;
 
     case SYS_OPEN:
+      is_valid_ptr (f->esp + 4);
       arg0 = *(uint32_t *)(f->esp + 4);
+      is_valid_ptr ((void *)arg0);
       (f->eax) = open ((char *)arg0);
       break;
 
     case SYS_FILESIZE:
+      is_valid_ptr (f->esp + 4);
       arg0 = *(uint32_t *)(f->esp + 4);
       (f->eax) = filesize ((int)arg0);
       break;
 
     case SYS_READ:
+      is_valid_ptr (f->esp + 12);
       arg0 = *(uint32_t *)(f->esp + 4);
       arg1 = *(uint32_t *)(f->esp + 8);
       arg2 = *(uint32_t *)(f->esp + 12);
+      is_valid_ptr ((void *)arg1);
       (f->eax) = read ((int)arg0, (void *)arg1, (unsigned)arg2);
       break;
 
     case SYS_WRITE:
+      is_valid_ptr (f->esp + 12);
       arg0 = *(uint32_t *)(f->esp + 4);
       arg1 = *(uint32_t *)(f->esp + 8);
       arg2 = *(uint32_t *)(f->esp + 12);
+      is_valid_ptr ((void *)arg1);
       (f->eax) = write ((int)arg0, (void *)arg1, (unsigned)arg2);
       break;
 
     case SYS_SEEK:  
+      is_valid_ptr (f->esp + 8);
       arg0 = *(uint32_t *)(f->esp + 4);
       arg1 = *(uint32_t *)(f->esp + 8);
       seek ((int)arg0, (unsigned)arg1);
       break;
 
     case SYS_TELL:
+      is_valid_ptr (f->esp + 4);
       arg0 = *(uint32_t *)(f->esp + 4);
       (f->eax) = tell ((int)arg0);
       break;
 
     case SYS_CLOSE:
+      is_valid_ptr (f->esp + 4);
       arg0 = *(uint32_t *)(f->esp + 4);
       close ((int)arg0);
       break;
@@ -121,12 +153,25 @@ exit (int status)
   /* wait until parent info is set */
   sema_down (&cur->parent_sema);
 
-  struct child *ch = &cur->child_info;
+  tid_t parent_tid = cur->parent_tid;
+  struct thread *parent_t = get_thread_from_tid (parent_tid);
+  if (parent_t != NULL) {
+    struct child *ch = NULL;
+    struct list *child_list_of_par = &parent_t->child_list;
+    struct list_elem *e;
+  
+    for (e = list_begin (child_list_of_par); e != list_end (child_list_of_par);
+         e = list_next (e)) {
+      ch = list_entry (e, struct child, elem);
+      if (ch->child_tid == cur->tid)
+        break;
+    }
 
-  ASSERT (ch->child_tid == cur->tid);
+    ASSERT (ch->child_tid == cur->tid);
 
-  ch->status = status;
-  sema_up (&ch->sema);
+    ch->status = status;
+    sema_up (&ch->sema);
+  }
 
   thread_exit ();
 }
@@ -134,10 +179,7 @@ exit (int status)
 pid_t
 exec (const char *cmd_line)
 {
-  //struct thread *t = pg_round_down (f_->esp);
-  tid_t child = process_execute (cmd_line);
-
-  return (pid_t)child;
+  return process_execute (cmd_line);
 }
 
 int
@@ -149,6 +191,10 @@ wait (pid_t pid)
 bool
 create (const char *file, unsigned initial_size)
 {
+  if (file == NULL) {
+    exit (-1);
+  }
+
   lock_acquire (&filelock);
   bool success = filesys_create (file, initial_size);
   lock_release (&filelock);
@@ -158,6 +204,10 @@ create (const char *file, unsigned initial_size)
 bool
 remove (const char *file)
 {
+  if (file == NULL) {
+    exit (-1);
+  }
+
   lock_acquire (&filelock);
   bool success = filesys_remove (file);
   lock_release (&filelock);
@@ -167,12 +217,19 @@ remove (const char *file)
 int
 open (const char *file)
 {
+  if (file == NULL) {
+    return -1;
+  }
+
   lock_acquire (&filelock);
   struct file *opened_file = filesys_open (file);
   lock_release (&filelock);
-  //struct thread *t = pg_round_down (f_->esp);
   struct thread *t = thread_current ();
   int fd;
+
+  if (opened_file == NULL) {
+    return -1;
+  }
 
   /* find empty entry in fd_table */
   for (fd = 2; fd < MAX_FD; fd++) {
@@ -191,10 +248,17 @@ open (const char *file)
 int
 filesize (int fd)
 {
-  //struct thread *t = pg_round_down (f_->esp);
+  if (fd >= MAX_FD || fd < 2) {
+    return 0;
+  }
+
   struct thread *t = thread_current ();
   struct file *opened_file = t->fd_table[fd];
   int length;
+
+  if (opened_file == NULL) {
+    return 0;
+  }
 
   lock_acquire (&filelock);
   length = file_length (opened_file);
@@ -206,8 +270,11 @@ filesize (int fd)
 int
 read (int fd, void *buffer, unsigned size)
 {
+  if (fd >= MAX_FD || fd < 0) {
+    return 0;
+  }
+
   struct file *file;
-  //struct thread *t = pg_round_down (f_->esp);
   struct thread *t = thread_current ();
   unsigned read_cnt = 0;
 
@@ -223,6 +290,12 @@ read (int fd, void *buffer, unsigned size)
 
   /* get file from fd */
   file = t->fd_table[fd];
+  
+  if (file == NULL) {
+    lock_release (&filelock);
+    return 0;
+  }
+
   read_cnt = file_read (file, buffer, size);
   lock_release (&filelock);
   return (int)read_cnt;
@@ -231,8 +304,11 @@ read (int fd, void *buffer, unsigned size)
 int
 write (int fd, const void *buffer, unsigned size)
 {
+  if (fd >= MAX_FD || fd < 0) {
+    return 0;
+  }
+
   struct file *file;
-  //struct thread *t = pg_round_down (f_->esp);
   struct thread *t = thread_current ();
   int write_cnt = size;
   
@@ -246,6 +322,11 @@ write (int fd, const void *buffer, unsigned size)
   /* get file from fd */
   file = t->fd_table[fd];
 
+  if (file == NULL) {
+    lock_release (&filelock);
+    return 0;
+  }
+
   write_cnt = file_write (file, buffer, size);
   lock_release (&filelock);
   return write_cnt;
@@ -254,10 +335,17 @@ write (int fd, const void *buffer, unsigned size)
 void
 seek (int fd, unsigned position)
 {
-  //struct thread *t = pg_round_down (f_->esp);
+  if (fd >= MAX_FD || fd < 2) {
+    return;
+  }
+
   struct thread *t = thread_current ();
   struct file *opened_file = t->fd_table[fd];
   
+  if (opened_file == NULL) {
+    return;
+  }
+
   lock_acquire (&filelock);
   file_seek (opened_file, position);
   lock_release (&filelock);
@@ -266,11 +354,18 @@ seek (int fd, unsigned position)
 unsigned
 tell (int fd)
 {
-  //struct thread *t = pg_round_down (f_->esp);
+  if (fd >= MAX_FD || fd < 2) {
+    return 0;
+  }
+
   struct thread *t = thread_current ();
   struct file *opened_file = t->fd_table[fd];
   int next;
   
+  if (opened_file == NULL) {
+    return 0;
+  }
+
   lock_acquire (&filelock);
   next = file_tell (opened_file);
   lock_release (&filelock);
@@ -281,13 +376,21 @@ tell (int fd)
 void
 close (int fd)
 {
-  //struct thread *t = pg_round_down (f_->esp);
+  if (fd >= MAX_FD || fd < 0) {
+    return;
+  }
+
   struct thread *t = thread_current ();
   struct file *opened_file = t->fd_table[fd];  
 
   if (fd == 0 || fd == 1) {
     return;
   }
+  
+  if (opened_file == NULL) {
+    return;
+  }
+
   lock_acquire (&filelock);
   file_close (opened_file);
   lock_release (&filelock);

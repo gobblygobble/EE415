@@ -467,7 +467,7 @@ init_thread (struct thread *t, const char *name, int priority)
 #ifdef USERPROG
   list_init (&t->child_list);
   sema_init (&t->parent_sema, 0);
-  sema_init (&t->loaded, 0);
+  sema_init (&t->loaded_sema, 0);
 #endif
 
   old_level = intr_disable ();

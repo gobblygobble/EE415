@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -17,6 +18,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 
 #define MAX_ARGS 128
 
@@ -37,7 +39,6 @@ process_execute (const char *file_name)
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL) {
-    //print_before_exit (file_name, TID_ERROR);
     return TID_ERROR;
   }
   strlcpy (fn_copy, file_name, PGSIZE);
@@ -51,20 +52,28 @@ process_execute (const char *file_name)
   struct thread *ch_t;
   struct child *child_info;
 
-  if (tid != -1) {
+  if (tid != TID_ERROR) {
     ch_t = get_thread_from_tid (tid);
     ASSERT (ch_t != NULL);
-    ch_t->parent_t = t;
+    ch_t->parent_tid = t->tid;
 
-    child_info = &ch_t->child_info;
+    child_info = (struct child *)malloc(sizeof (struct child));;
     child_info->child_tid = tid;
     list_push_front (&(thread_current ()->child_list), &child_info->elem);
     sema_init (&child_info->sema, 0);
     child_info->status = -1;
 
-    sema_up(&ch_t->parent_sema);
+    char *save_ptr;
+    char *child_name_cpy = (char *)malloc(strlen (ch_t->name) + 1);
+    strlcpy (child_name_cpy, ch_t->name, strlen (ch_t->name) + 1);
+    child_name_cpy = strtok_r (child_name_cpy, " ", &save_ptr);
+    strlcpy (child_info->child_name, child_name_cpy, strlen (child_name_cpy) + 1);
 
-    sema_down (&ch_t->loaded);
+    sema_down (&ch_t->loaded_sema);
+    if (ch_t->loaded == false) {
+      tid = TID_ERROR;
+    }
+    sema_up(&ch_t->parent_sema);
   }
   return tid;
 }
@@ -93,47 +102,50 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  thread_current ()->loaded = success;
 
-  if (success)
-    sema_up (&(thread_current ()->loaded));
+  sema_up (&(thread_current ()->loaded_sema));
 
-  /* push arguments into stack */
-  for (int i = argc - 1; i >= 0; i--) {
-    if_.esp -= strlen (args[i]) + 1;
-    strlcpy (if_.esp, args[i], strlen (args[i]) + 1);
-    args[i] = if_.esp;
+  if (!success) {
+    exit (-1);
   }
+  else {    
+    /* push arguments into stack */
+    for (int i = argc - 1; i >= 0; i--) {
+      if_.esp -= strlen (args[i]) + 1;
+      strlcpy (if_.esp, args[i], strlen (args[i]) + 1);
+      args[i] = if_.esp;
+    }
 
-  /* word align */
-  while ((uint32_t)if_.esp & 3) { /* remainder when divided by 4 should be zero */
-    if_.esp -= 1;
-    *(uint8_t *)if_.esp = (uint8_t)0;
-  }
+    /* word align */
+    while ((uint32_t)if_.esp & 3) { /* remainder when divided by 4 should be zero */
+      if_.esp -= 1;
+      *(uint8_t *)if_.esp = (uint8_t)0;
+    }
 
-  /* push argv[] */
-  if_.esp -= 4;
-  *(char **)if_.esp = (char *)0;
-  for (int i = argc - 1; i >= 0; i--) {
+    /* push argv[] */
     if_.esp -= 4;
-    *(char **)if_.esp = args[i];
-  }
+    *(char **)if_.esp = (char *)0;
+    for (int i = argc - 1; i >= 0; i--) {
+      if_.esp -= 4;
+      *(char **)if_.esp = args[i];
+    }
   
-  /* push argv */
-  if_.esp -= 4;
-  *(char ***)if_.esp = (char **)(if_.esp + 4);
+    /* push argv */
+    if_.esp -= 4;
+    *(char ***)if_.esp = (char **)(if_.esp + 4);
 
-  /* push argc */
-  if_.esp -= 4;
-  *(int *)if_.esp = argc;
+    /* push argc */
+    if_.esp -= 4;
+    *(int *)if_.esp = argc;
 
-  /* push fake return address */
-  if_.esp -= 4;
-  *(void **)if_.esp = (void  *)0;
+    /* push fake return address */
+    if_.esp -= 4;
+    *(void **)if_.esp = (void  *)0;
 
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+    /* If load failed, quit. */
+    palloc_free_page (file_name);
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -158,13 +170,23 @@ int
 process_wait (tid_t child_tid) 
 {
   struct thread *child_t = get_thread_from_tid (child_tid);
-  if (get_child_from_tid (child_tid) == NULL || child_t == NULL) {
+  struct child *child_info = get_child_from_tid (child_tid);
+  int status;
+
+  if (child_info == NULL) {
     return -1;
   }
   
-  struct child *child_info = get_child_from_tid (child_tid);
-  sema_down (&child_info->sema);
-  return child_info->status;
+  if (child_t != NULL)
+    sema_down (&child_info->sema);
+
+  printf ("%s: exit(%d)\n", child_info->child_name, child_info->status);
+
+  list_remove (&child_info->elem);
+  status = child_info->status;
+  free (child_info);
+
+  return status;
 }
 
 /* Free the current process's resources. */
@@ -190,6 +212,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  
 }
 
 /* Sets up the CPU for running user code in the current
@@ -299,6 +322,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   file = filesys_open (file_name);
+  //file_deny_write (file);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -540,12 +564,3 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-/* changes */
-
-void
-print_before_exit (const char *file_name, int exit_code)
-{
-  /* Function called before returning in process_execute () */
-  printf ("%s: exit(%d)\n", file_name, exit_code);
-  return;
-}
