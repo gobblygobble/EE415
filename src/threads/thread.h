@@ -5,8 +5,6 @@
 #include <list.h>
 #include <stdint.h>
 
-#include "threads/synch.h"
-#include "threads/fixed_point_calc.h"
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -25,7 +23,6 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-
 #ifdef USERPROG
 
 #define MAX_FD 128			/* Maximum number of opened files */
@@ -105,14 +102,6 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
-    struct list_elem sleepelem;		/* """ sleeping thread list. */
-    int64_t wakeup_time;		/* time for thread to wake up */
-    struct lock *waiting_lock;		/* The lock that it waits for */
-
-    struct list lock_list;
-    struct thread *max_waiter;
-    int donated_priority;		/* not zero when donated */
-
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -126,10 +115,6 @@ struct thread
     struct list child_list;		/* list of struct child */
     struct child child_info;
 #endif
-
-    /* Variables used in mlfq-scheduling */
-    int nice;
-    fp_t recent_cpu;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
@@ -138,9 +123,6 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-
-/* external variable used in mlfq-scheduling */
-extern fp_t load_avg; 			/* System's load average */
 
 void thread_init (void);
 void thread_start (void);
@@ -167,24 +149,11 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
-int thread_get_priority_of (const struct thread *);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
-bool compare_priority (const struct list_elem *,
-			const struct list_elem *,
-			void * UNUSED);
-
-bool need_yield (void);
-
-/* MLFQ Functions */
-int thread_update_priority (struct thread *);
-void thread_update_recent_cpu (struct thread *);
-void system_update_load_avg (void);
-void thread_increment_recent_cpu (void);
 
 struct list* get_readylist (void);
 
