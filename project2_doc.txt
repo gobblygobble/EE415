@@ -44,8 +44,6 @@ Afterwards, after word-aligning and pushing 0 into argv[argc], we pushed the add
 stored in args[], so that the order would fit.
 In the end, of course, we pushed in the argv address, argc, and a fake return address.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
@@ -60,8 +58,8 @@ problems that may arise while using this function.
 >> separation.  Identify at least two advantages of the Unix approach.
 
 First, parsing arguments in shell is generally faster than parsing in the kernel.
-Second, 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Second, it is more secure because it has a much lower possibility of invading
+the kernel memory space.
 
 			     SYSTEM CALLS
 			     ============
@@ -77,6 +75,8 @@ Second,
 	{
 		tid_t child_tid:
 			pid of child thread
+		char child_name[16]:
+			child's executable name, to print in exit ()
 		struct list_elem elem:
 			make struct child listable
 		struct semaphore sema:
@@ -95,13 +95,20 @@ Second,
 		struct semaphore parent_sema:
 			semaphore, used to prevent child thread from exiting
 			before parent has the child thread's information.
-		struct semaphore loaded:
+		struct semaphore loaded_sema:
 			semaphore, used to prevent parent's process_execute ()
 			returning before child loads its executable.
+		bool loaded:
+			to see if the executable has been successfully loaded.
 		struct list child_list:
 			list of struct child
 		struct child child_info:
 			struct child in thread
+		int depth:
+			to avoid manipulating recursive calls to mess with pintOS.
+			(MAX_DEPTH set at the top of thread.h as 31 ( = 30 + 1 for main thread))
+		struct file *exec_file:
+			pointer to the file that the thread will execute.
 	}	
 
 >> B2: Describe how file descriptors are associated with open files.
@@ -124,6 +131,8 @@ When an interrupt is issued, we are given the interrupt frame of the process
 that was interrupted.
 In here we have the esp of the process, so that we can access the stack
 of the process that was running before the current one.
+While doing so, we always check if the pointer we will access,
+or may possibly access is a valid one.
 We may also access the eax register in the interrupt frame, so we are able
 to 'return' a value to the previous process, in functions that do not 'return',
 like exit () that needs to store its status, but is not suppoed to actually return.
@@ -135,12 +144,31 @@ like exit () that needs to store its status, but is not suppoed to actually retu
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+For 4,096 bytes of data, the maximum number is the worst case when all bytes
+are apart from each other, therefore pagedir_get_page () may have to be called
+up to 4,096 times. In the best case, one page is just enough to handle the 4KB,
+so the number of calls to pagedir_get_page () is minimum 1 and maximum 4,096.
 
+(If the data is continuously formed, like an array, the maximum number would be 1)
+
+For 2 bytes, similarly, the maximum number of calls to pagedir_get_page ()
+is 2 times, with the least number of calls being 1 time.
+
+To improve theese numbers, we may try to allocate data like arrays in the same page,
+as much as possible.
+By doing so, when a system call tries to copy some user data to a kernel, they will
+be likely be close together, (in the same page for the happiest case) and thus
+the maximum numbers calling pagedir_get_page () would be significantly decreased. 
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
 
-
+By making use of semaphores, when a child dies, it calls sema_up () so that
+when the parent tries to wait for the child, parent's sema_down () will not make
+the parent go to sleep.
+However, if the sema_up () hasn't been called in the child because it did not die
+yet, the parent will go to sleep so that it will successfully wait for the child
+to exit.
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
@@ -156,7 +184,17 @@ like exit () that needs to store its status, but is not suppoed to actually retu
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+Every time we receive a pointer from the user, we check if it lies in
+a valid address space (From 0x08048000 to 0xc0000000 aka PHYS_BASE).
+Next, we check if the given pointer was mapped into physical address.
 
+If it does not meet at least one of the conditions, we call exit () system call.
+Then the system call exit () frees all the resources.
+
+If the user program tries to access a bad pointer, such as NULL pointers or kernel
+memory space, the problem is handled at page_fault (), by checking if the exception
+was called by a user program. If it was, then we simply call exit (-1) and that
+guarantees proper resource freeing.
 
 ---- SYNCHRONIZATION ----
 
@@ -165,7 +203,10 @@ like exit () that needs to store its status, but is not suppoed to actually retu
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
 
-
+In struct thread, we added 'bool loaded' and 'struct semaphore loaded_sema'.
+After load () is called, we store its return value in 'loaded'.
+Then we call sema_up () on 'loaded_sema' so that the parent can finally check
+the child thread's 'loaded' value to see if it has been successfully loaded or not.
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
@@ -181,7 +222,8 @@ It is woken up when C calls sema_up () right before it exits completely.
 If it is called after C exits, P tries to sema_down on a 1-value semaphore.
 Then nothing special happens and wait () returns.
 All resources are ensured to be freed properly, because exit () takes care of them.
-
+If the parent died without waiting for the child, then when child tries to exit,
+it will call exit right away. But this is not supposed to cause any problems.
 
 
 ---- RATIONALE ----
@@ -189,7 +231,8 @@ All resources are ensured to be freed properly, because exit () takes care of th
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+We used checking address, because it is a lot simpler
+than managing in page_fault ().
 
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
@@ -216,6 +259,9 @@ the quarter.
 
 >> In your opinion, was this assignment, or any one of the three problems
 >> in it, too easy or too hard?  Did it take too long or too little time?
+
+It was relatively easy.
+But it did take a long time and debugging was a little difficult.
 
 >> Did you find that working on a particular part of the assignment gave
 >> you greater insight into some aspect of OS design?

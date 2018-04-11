@@ -27,6 +27,7 @@ typedef int tid_t;
 #ifdef USERPROG
 
 #define MAX_FD 128			/* Maximum number of opened files */
+#define MAX_DEPTH 31			/* Maximum number of depth for threads */
 
 struct child {
   tid_t child_tid;
@@ -117,6 +118,8 @@ struct thread
     bool loaded;
     struct list child_list;		/* list of struct child */
     struct child child_info;
+    int depth;				/* how deep the thread is (to adjust to recursive exec ()) */
+    struct file* exec_file;		/* pointer to the file that this thread will execute */
 #endif
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

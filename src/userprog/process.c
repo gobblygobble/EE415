@@ -34,6 +34,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  struct thread *t = thread_current ();
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -43,12 +44,15 @@ process_execute (const char *file_name)
   }
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  if (t->depth >= MAX_DEPTH) {
+    return -1;
+  }
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
 
-  struct thread *t = thread_current ();
   struct thread *ch_t;
   struct child *child_info;
 
@@ -56,6 +60,7 @@ process_execute (const char *file_name)
     ch_t = get_thread_from_tid (tid);
     ASSERT (ch_t != NULL);
     ch_t->parent_tid = t->tid;
+    ch_t->depth = t->depth + 1;
 
     child_info = (struct child *)malloc(sizeof (struct child));;
     child_info->child_tid = tid;
@@ -102,6 +107,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
   thread_current ()->loaded = success;
 
   sema_up (&(thread_current ()->loaded_sema));
@@ -322,13 +328,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   file = filesys_open (file_name);
-  //file_deny_write (file);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
+  file_deny_write (file);
+  t->exec_file = file;
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -412,7 +419,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
   return success;
 }
 
