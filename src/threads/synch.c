@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "threads/interrupt.h"
+
 #include "threads/thread.h"
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
