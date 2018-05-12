@@ -6,6 +6,17 @@
 #include "threads/thread.h"
 #include "userprog/syscall.h"
 
+#ifdef VM
+#include "threads/vaddr.h"
+#include "threads/palloc.h"
+#include "userprog/pagedir.h"
+#include "vm/frame.h"
+#include "vm/swap.h"
+#include "vm/page.h"
+#include <string.h>
+#define MAX_STACK_SIZE (1 << 23)
+#endif
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -149,7 +160,78 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  //printf ("page fault at %p\n", fault_addr);
+
+#ifdef VM
+  void *fault_addr_rd = pg_round_down (fault_addr);
+  struct thread *cur = thread_current ();
+  struct sptEntry *faultEntry = spt_get_entry (cur->spt, fault_addr_rd);
+
+  /* Validate memory access */
+  if (!not_present)
+    goto INVALID_ACCESS;
+
+  if (faultEntry == NULL) {
+    /* Stack growth */
+    void *esp = user ? f->esp : cur->esp;
+    //printf ("esp: %p\n", esp);
+    if (PHYS_BASE - MAX_STACK_SIZE < fault_addr && fault_addr <= PHYS_BASE) {
+      if (fault_addr == esp - 4 || fault_addr == esp - 32 || fault_addr >= esp) {
+        void *zero_page = frame_alloc (PAL_USER | PAL_ZERO, fault_addr_rd);
+        spt_add_installed (cur->spt, fault_addr_rd, zero_page);
+        pagedir_set_page (cur->pagedir, fault_addr_rd, zero_page, true);
+        return;
+      }
+    }
+    //printf ("Ungrowable region\n");
+    exit (-1);
+  }
+
+  if (faultEntry->status == SWAPPED) {
+    /* Requested page was swapped out. */
+    void *frame = frame_alloc (PAL_USER, fault_addr_rd);
+    swap_in (fault_addr_rd, frame);
+
+    /* Update info in page table and supplemental page table */
+    pagedir_set_page (cur->pagedir, fault_addr_rd, frame, faultEntry->writable);
+    faultEntry->frame = frame;
+    faultEntry->status = INSTALLED;
+    faultEntry->dirty = false;
+    return;
+  }
+
+  if (faultEntry->status == FSYS) {
+    void *frame = frame_alloc (PAL_USER, fault_addr_rd);
+
+    if (frame == NULL) {
+      //printf ("cannot allocate frame\n");
+      exit (-1);
+    }
+
+    file_seek (faultEntry->file, faultEntry->ofs);
+    if (file_read (faultEntry->file, frame, faultEntry->read_bytes) != (off_t)faultEntry->read_bytes)
+    {
+      frame_free (frame);
+      //printf ("failed to read file\n");
+      exit (-1);
+    }
+    memset (frame + faultEntry->read_bytes, 0, faultEntry->zero_bytes);
+
+    pagedir_set_page (cur->pagedir, fault_addr_rd, frame, faultEntry->writable);
+    faultEntry->frame = frame;
+    faultEntry->status = INSTALLED;
+    faultEntry->dirty = false;
+    return;
+  }
+
+INVALID_ACCESS:
+#endif
+
   if (user) exit (-1);
+  else {
+    (f->eax) = -1;
+    return;
+  }
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to

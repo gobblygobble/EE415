@@ -1,4 +1,4 @@
-===  ALL USERS PLEASE NOTE  ========================
+LL USERS PLEASE NOTE  ========================
 
 CAR and CDR now return extra values.
 
@@ -15,3 +15,4 @@ the object.  In a related change, the functions MAKE-ARRAY and CONS
 have been fixed so they don't allocate any storage except on the
 stack.  This should hopefully help people who don't like using the
 garbage collector because it cold boots the machine so often.
+
