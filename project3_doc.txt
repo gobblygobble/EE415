@@ -1,0 +1,476 @@
+       	       	    +---------------------------+
+		    |		EE 415		|
+		    | PROJECT 3: VIRTUAL MEMORY	|
+		    |	   DESIGN DOCUMENT	|
+		    +---------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.  
+
+Jehyeon Bang <bangjh0430@kaist.ac.kr>
+Jinha Chung <gobblygobble@kaist.ac.kr>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+We wish to use THREE DELAY TOKENS for project 3.
+Thus, we will submit the final version by 6pm on Sunday, May 13th.
+We have not implemented any of the mmap functionalities.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			PAGE TABLE MANAGEMENT
+			=====================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+New files: vm/frame.h vm/frame.c vm/page.h vm/page.c
+
+@ frame.h:
+
+typedef struct hash frameTable;
+	frame table entry structure	
+struct frameTableEntry {
+	void *frame;
+	void *page;
+	uint32_t *pagedir;
+
+	struct hash_elem hash_elem;
+	struct list_elem list_elem;
+	};
+
+@ frame.c:
+
+static unsigned ft_hash (const struct hash_elem *element, void *aux UNUSED) {
+  struct frameTableEntry *fte = hash_entry (element, struct frameTableEntry, hash_elem);
+  return hash_bytes (&fte->frame, sizeof (void*));
+}
+
+static bool ft_less (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
+  struct frameTableEntry *fte_a = hash_entry (a, struct frameTableEntry, hash_elem);
+  struct frameTableEntry *fte_b = hash_entry (b, struct frameTableEntry, hash_elem);
+
+  return fte_a->frame < fte_b->frame;
+}
+
+void ft_init () {
+  hash_init (&ft, ft_hash, ft_less, NULL);
+  list_init (&all_frames);
+  lock_init (&frame_alloc_lock);
+  lock_init (&frame_free_lock);
+}
+
+static bool ft_add_entry (void *frame, void *page, uint32_t *pagedir) {
+  struct frameTableEntry *fte;
+  fte = malloc (sizeof (struct frameTableEntry));
+  if (fte == NULL) return false;
+  fte->frame = frame;
+  fte->pagedir = pagedir;
+  fte->page = page;
+
+  if (hash_insert (&ft, &fte->hash_elem) == NULL) {
+    list_push_back (&all_frames, &fte->list_elem);
+    return true;
+  }
+  return false;
+}
+
+static struct frameTableEntry* ft_get_entry (void *frame) {
+  struct frameTableEntry fte;
+  struct hash_elem *fte_elem;
+
+  fte.frame = frame;
+  fte_elem = hash_find (&ft, &fte.hash_elem);
+
+  return hash_entry (fte_elem, struct frameTableEntry, hash_elem);
+}
+
+static bool ft_delete_entry (void *frame) {
+  struct frameTableEntry *fte = ft_get_entry (frame);
+  if (hash_delete (&ft, &fte->hash_elem) == NULL
+	|| list_remove (&fte->list_elem) == NULL)
+    return false;
+  return true;
+}
+
+static void* select_victim (void) {
+  ASSERT (!list_empty (&all_frames));
+
+  struct list_elem *victim_elem = list_pop_front (&all_frames);
+  list_push_back (&all_frames, victim_elem);
+  
+  struct frameTableEntry *victim = list_entry (victim_elem, struct frameTableEntry, list_elem);
+  return victim;
+}
+
+void* frame_alloc (enum palloc_flags flags, void *page) {
+  lock_acquire (&frame_alloc_lock);
+  void *frame = palloc_get_page (flags);
+
+  if (frame == NULL) {
+    struct frameTableEntry *victim = select_victim ();
+    swap_out (victim->page);
+
+    frame_free (victim->frame);
+    frame = palloc_get_page (flags);
+    ASSERT (frame != NULL);
+  }
+  ft_add_entry (frame, page, thread_current ()->pagedir);
+  
+  lock_release (&frame_alloc_lock);
+  return frame;
+}
+
+void frame_free (void *frame) {
+  lock_acquire (&frame_free_lock);
+
+  struct frameTableEntry *fte = ft_get_entry (frame);
+  pagedir_clear_page (fte->pagedir, fte->page);
+  palloc_free_page (frame);
+  ft_delete_entry (frame);
+
+  lock_release (&frame_free_lock);
+}
+
+@page.h:
+
+typedef struct hash SupPageTable;
+	status for pages
+enum STATUS
+{
+  INSTALLED,
+  SWAPPED,
+  FSYS,
+  ALLZERO
+};
+	supplementary page table entry structure
+struct sptEntry
+{
+  void *page;
+  void *frame;
+  enum STATUS status;
+  
+  struct hash_elem hash_elem;
+  block_sector_t block_idx;
+  bool dirty;
+  struct file *file;
+  off_t ofs;
+  uint32_t read_bytes;
+  uint32_t zero_bytes;
+  bool writable;
+};
+
+static unsigned spt_hash (const struct hash_elem *element, void *aux UNUSED) {
+  struct sptEntry *spte = hash_entry (element, struct sptEntry, hash_elem);
+  return hash_bytes (&spte->page, sizeof (void *));
+}
+
+static bool spt_less (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
+  struct sptEntry *spte_a = hash_entry (a, struct sptEntry, hash_elem);
+  struct sptEntry *spte_b = hash_entry (b, struct sptEntry, hash_elem);
+  
+  return spte_a->page < spte_b->page;
+}
+
+SupPageTable* spt_create () {
+  SupPageTable *spt = malloc (sizeof (SupPageTable));
+  if (spt == NULL)
+    PANIC ("not enough memory for spt");
+  hash_init (spt, spt_hash, spt_less, NULL);
+  return spt;
+}
+
+bool spt_add_installed (SupPageTable *spt, void *page, void *frame) {
+  struct sptEntry *new;
+  new = malloc (sizeof (struct sptEntry));
+  new->page = page;
+  new->frame = frame;
+  new->status = INSTALLED;
+  new->dirty = false;
+  new->writable = true;
+
+  return hash_insert (spt, &new->hash_elem) == NULL;
+}
+
+bool spt_add_filesys (SupPageTable *spt, void *page, struct file *file, off_t offset, uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+  struct sptEntry *new;
+  new = malloc (sizeof (struct sptEntry));
+  new->page = page;
+  new->file = file;
+  new->ofs = offset;
+  new->read_bytes = read_bytes;
+  new->zero_bytes = zero_bytes;
+  new->writable = writable;
+  new->status = FSYS;
+  new->dirty = false;
+
+  return hash_insert (spt, &new->hash_elem) == NULL;
+}
+
+bool spt_add_allzero (SupPageTable *spt, void *page, void *frame) {
+  struct sptEntry *new;
+  new = malloc (sizeof (struct sptEntry));
+  new->page = page;
+  new->frame = frame;
+  new->status = ALLZERO;
+  new->dirty = false;
+  new->writable = true;
+
+  return hash_insert (spt, &new->hash_elem) == NULL;
+}
+
+bool spt_delete_entry (SupPageTable *spt, void *page) {
+  struct sptEntry del;
+  struct hash_elem *del_elem;
+  
+  del.page = page;
+  del_elem = hash_find (spt, &del.hash_elem);
+  return hash_delete (spt, del_elem) != NULL;
+}
+
+struct sptEntry* spt_get_entry (SupPageTable *spt, void *page) {
+  struct sptEntry tmp;
+  struct hash_elem *tmp_elem;
+
+  tmp.page = page;
+  tmp_elem = hash_find (spt, &tmp.hash_elem);
+  if (tmp_elem == NULL) return NULL;
+  return hash_entry (tmp_elem, struct sptEntry, hash_elem);
+}
+
+bool spt_set_swapped (SupPageTable *spt, void *page, block_sector_t block_idx) {
+  struct sptEntry *target;
+  target = spt_get_entry (spt, page);
+  
+  if (target == NULL) return false;
+  target->frame = NULL;
+  target->status = SWAPPED;
+  target->block_idx = block_idx;
+  return true;
+}
+
+---- ALGORITHMS ----
+
+>> A2: In a few paragraphs, describe your code for locating the frame,
+>> if any, that contains the data of a given page.
+
+We implemented the frame table using the given hash table structure.
+Since the hash table takes care of the adding and deleting algorithms itself, all we needed to do was choose the right data to hash with. We decided to hash with the given page's bits, since this had to be different for all different pages.
+So when we're given a certain page, we look for it in the supplementary page table, to find the entry to the frame table entry, go to the entry and return the frame address.
+
+>> A3: How does your code coordinate accessed and dirty bits between
+>> kernel and user virtual addresses that alias a single frame, or
+>> alternatively how do you avoid the issue?
+
+We have not taken this problem into account, but no problem has arised so far.
+
+---- SYNCHRONIZATION ----
+
+>> A4: When two user processes both need a new frame at the same time,
+>> how are races avoided?
+
+Upon frame_alloc () and frame_free (), they each attempt to acquire alloc_lock and free_lock, respectively, so when one process tries to allocate a new frame, no other process can cut in the process, thus preserving synchronization for frame allocation.
+
+---- RATIONALE ----
+
+>> A5: Why did you choose the data structure(s) that you did for
+>> representing virtual-to-physical mappings?
+
+This implementation seemed the most straightforward. All our data structures go along with exactly the materials we learned in class, so we found it extremely comfortable to handle, since we have already dealt with a few error cases in class, and could think and avoid certain issues before we actually bumped into them later on.
+
+		       PAGING TO AND FROM DISK
+		       =======================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+New files: vm/swap.h vm/swap.c
+
+@swap.c:
+	swap device for swapping
+struct block *swap_device;
+	swap slot bitmap
+struct bitmap *swap_slot;
+
+static void swap_device_init (void) {
+  swap_device = block_get_role (BLOCK_SWAP);
+  if (swap_device == NULL) {
+    PANIC ("No such block device.");
+  }
+}
+
+static void swap_slot_init (void) {
+  swap_slot = bitmap_create (block_size (swap_device));
+  if (swap_slot == NULL) {
+    PANIC ("Not enough memory for swap slot.");
+  }
+}
+
+void swap_init (void) {
+  swap_device_init ();
+  swap_slot_init ();
+}
+
+void swap_out (void *page) {
+  ASSERT (swap_device);
+  ASSERT (pg_ofs (page) == 0);
+  
+  size_t idx = bitmap_scan_and_flip (swap_slot, 0, PGSIZE / BLOCK_SECTOR_SIZE, false);
+  block_sector_t block_idx = idx;
+  void *frame = pagedir_get_page (thread_current ()->pagedir, page);
+
+  for (int i = 0; i < PGSIZE / BLOCK_SECTOR_SIZE; i++) {
+    block_write (swap_device, block_idx + i, frame + i * BLOCK_SECTOR_SIZE);
+  }
+  /* Update Supplemental Page Table */
+  SupPageTable *spt = thread_current ()->spt;
+  spt_set_swapped (spt, page, block_idx);
+}
+
+void swap_in (void *page, void *frame) {
+  ASSERT (swap_device);
+  ASSERT (pg_ofs (page) == 0);
+
+  struct thread *cur = thread_current ();
+  struct sptEntry *target = spt_get_entry (cur->spt, page);
+
+  block_sector_t block_idx = target->block_idx;
+  size_t idx = block_idx;
+
+  for (int i = 0; i < PGSIZE / BLOCK_SECTOR_SIZE; i++) {
+    block_read (swap_device, block_idx + i, frame + i * BLOCK_SECTOR_SIZE);
+  }
+  bitmap_set_multiple (swap_slot, idx, PGSIZE / BLOCK_SECTOR_SIZE, false);
+}
+ 
+---- ALGORITHMS ----
+
+>> B2: When a frame is required but none is free, some frame must be
+>> evicted.  Describe your code for choosing a frame to evict.
+
+
+
+>> B3: When a process P obtains a frame that was previously used by a
+>> process Q, how do you adjust the page table (and any other data
+>> structures) to reflect the frame Q no longer has?
+
+
+
+>> B4: Explain your heuristic for deciding whether a page fault for an
+>> invalid virtual address should cause the stack to be extended into
+>> the page that faulted.
+
+
+
+---- SYNCHRONIZATION ----
+
+>> B5: Explain the basics of your VM synchronization design.  In
+>> particular, explain how it prevents deadlock.  (Refer to the
+>> textbook for an explanation of the necessary conditions for
+>> deadlock.)
+
+We used only one lock each for frame allocation and freeing frames. And inside frame_alloc () it does not call itself, nor does frame_free () call itself inside frame_free ().
+Thus, no deadlocks can occur and the kernel is safe from any kinds of deadlocks.
+
+>> B6: A page fault in process P can cause another process Q's frame
+>> to be evicted.  How do you ensure that Q cannot access or modify
+>> the page during the eviction process?  How do you avoid a race
+>> between P evicting Q's frame and Q faulting the page back in?
+
+Upon eviction, frame_free () is the function that actually frees the frame and makes it 'usable' for other frame to be allocated. But inside frame_free (), we have set a lock in there for synchronization, and therefore no other process can bother this during the actual critical part of eviction.
+
+>> B7: Suppose a page fault in process P causes a page to be read from
+>> the file system or swap.  How do you ensure that a second process Q
+>> cannot interfere by e.g. attempting to evict the frame while it is
+>> still being read in?
+
+For some page to be swapped in, a new frame must be allocated to that corresponding page.
+Thus, it would have to call frame_alloc () to allocate itself some page. We have some locks in the function frame_alloc () itself so that in the process of allocating, it cannot be bothered.
+If the process was interrupted after it has allocated the frame but not yet linked it to the address yet, it would not matter because no other process would find that page to be "usable", and thus would not allocate that page anyways.
+When the process resumes, it can safely link the address with the newly allocated frame.
+
+>> B8: Explain how you handle access to paged-out pages that occur
+>> during system calls.  Do you use page faults to bring in pages (as
+>> in user programs), or do you have a mechanism for "locking" frames
+>> into physical memory, or do you use some other design?  How do you
+>> gracefully handle attempted accesses to invalid virtual addresses?
+
+Whenever a swapped-out page was demanded during system calls(kernel-control), we sent it to page_fault () to deal with the problem, and there we 'gracefully' bring in the swapped out page.
+
+---- RATIONALE ----
+
+>> B9: A single lock for the whole VM system would make
+>> synchronization easy, but limit parallelism.  On the other hand,
+>> using many locks complicates synchronization and raises the
+>> possibility for deadlock but allows for high parallelism.  Explain
+>> where your design falls along this continuum and why you chose to
+>> design it this way.
+
+We have two locks for frame allocation and frame freeing.
+At first, we used only one lock for the whole frame system, but then ran into the problem of trying to call its own lock when it tries to call frame_free () in frame_alloc (). Thus, we divided the total locks into two.
+The algorithm for this was still straightforward and is similar to using one lock for the whole VM system.
+We chose to implement this way because it was the most intuitive way to do it - no need to deal with deadlocks - and, as far as we've gone, have not met much of limitations dealing with parallelism issues.
+
+			 MEMORY MAPPED FILES
+			 ===================
+		***We have not dealt with mempory mapping***
+
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+---- ALGORITHMS ----
+
+>> C2: Describe how memory mapped files integrate into your virtual
+>> memory subsystem.  Explain how the page fault and eviction
+>> processes differ between swap pages and other pages.
+
+>> C3: Explain how you determine whether a new file mapping overlaps
+>> any existing segment.
+
+---- RATIONALE ----
+
+>> C4: Mappings created with "mmap" have similar semantics to those of
+>> data demand-paged from executables, except that "mmap" mappings are
+>> written back to their original files, not to swap.  This implies
+>> that much of their implementation can be shared.  Explain why your
+>> implementation either does or does not share much of the code for
+>> the two situations.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?
