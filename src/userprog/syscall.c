@@ -26,8 +26,18 @@ is_valid_ptr (const void *ptr)
   if (!(is_user_vaddr (ptr) && ptr > (void *)USER_LOWER_BOUND)) {
     exit (-1);
   }
+#ifndef VM
   if (pagedir_get_page (thread_current ()->pagedir, ptr) == NULL) {
     exit (-1);
+  }
+#endif
+}
+
+static void
+is_valid_buf (const char *buf, unsigned size)
+{
+  for (unsigned i=0; i<size; i++) {
+    is_valid_ptr (buf + i);
   }
 }
 
@@ -43,6 +53,7 @@ syscall_handler (struct intr_frame *f)
 {
   /* retrieve syscall number from intr_frame */
   is_valid_ptr (f->esp);
+  thread_current ()->esp = (f->esp);
   int syscall_num = *((int *)(f->esp));
   uint32_t arg0, arg1, arg2;
 
@@ -105,7 +116,7 @@ syscall_handler (struct intr_frame *f)
       arg0 = *(uint32_t *)(f->esp + 4);
       arg1 = *(uint32_t *)(f->esp + 8);
       arg2 = *(uint32_t *)(f->esp + 12);
-      is_valid_ptr ((void *)arg1);
+      is_valid_buf ((char *)arg1, (unsigned)arg2);
       (f->eax) = read ((int)arg0, (void *)arg1, (unsigned)arg2);
       break;
 
@@ -114,7 +125,7 @@ syscall_handler (struct intr_frame *f)
       arg0 = *(uint32_t *)(f->esp + 4);
       arg1 = *(uint32_t *)(f->esp + 8);
       arg2 = *(uint32_t *)(f->esp + 12);
-      is_valid_ptr ((void *)arg1);
+      is_valid_buf ((char *)arg1, (unsigned)arg2);
       (f->eax) = write ((int)arg0, (void *)arg1, (unsigned)arg2);
       break;
 
