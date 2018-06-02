@@ -53,7 +53,9 @@ syscall_handler (struct intr_frame *f)
 {
   /* retrieve syscall number from intr_frame */
   is_valid_ptr (f->esp);
+#ifdef VM
   thread_current ()->esp = (f->esp);
+#endif
   int syscall_num = *((int *)(f->esp));
   uint32_t arg0, arg1, arg2;
 
