@@ -2,4 +2,5 @@
    time. */
 
 #define TEST_SIZE 72943
+//#define TEST_SIZE 71680
 #include "tests/filesys/extended/grow-seq.inc"

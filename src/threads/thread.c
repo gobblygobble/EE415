@@ -14,6 +14,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -285,6 +286,7 @@ thread_exit (void)
 
 #ifdef USERPROG
   file_close (thread_current ()->exec_file);
+  dir_close (thread_current ()->cur_dir);
   process_exit ();
 #endif
 

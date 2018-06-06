@@ -20,4 +20,11 @@ int write (int, const void *, unsigned);
 void seek (int, unsigned);
 unsigned tell (int);
 void close (int);
+#ifdef FILESYS
+bool chdir (const char *);
+bool mkdir (const char *);
+bool readdir (int, char *);
+bool isdir (int);
+int inumber (int);
+#endif
 #endif /* userprog/syscall.h */

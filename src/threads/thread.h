@@ -9,6 +9,11 @@
 #include "vm/page.h"
 #endif
 
+#ifdef FILESYS
+#include "filesys/inode.h"
+#include "devices/block.h"
+//typedef block_sector_t inum_t;
+#endif
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -114,7 +119,8 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct file *fd_table[MAX_FD];	/* file descriptor table */
+    //struct file *fd_table[MAX_FD];	/* file descriptor table */
+    struct fsys *fd_table[MAX_FD];
     tid_t parent_tid;			/* parent thread's tid */
     struct semaphore parent_sema;	/* semaphore for parent info */
     struct semaphore loaded_sema;
@@ -129,6 +135,10 @@ struct thread
     SupPageTable *spt;
     void *esp;
 #endif
+
+#ifdef FILESYS
+    struct dir *cur_dir;
+#endif
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
@@ -139,7 +149,7 @@ struct thread
 extern bool thread_mlfqs;
 
 void thread_init (void);
-void thread_start (void);
+	void thread_start (void);
 
 void thread_tick (void);
 void thread_print_stats (void);

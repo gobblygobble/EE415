@@ -225,14 +225,17 @@ page_fault (struct intr_frame *f)
   }
 
 INVALID_ACCESS:
-#endif
 
   if (user) exit (-1);
   else {
     (f->eax) = -1;
     return;
   }
+#else
 
+  if (user) exit (-1);
+
+#endif
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */

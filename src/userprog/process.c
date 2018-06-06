@@ -335,15 +335,25 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  char *base, target[NAME_MAX + 1];
+  base = (char *)calloc (1, strlen (file_name) + 1); 
+  if (!dir_parse (file_name, base, target)) {
+    free (base);
+    goto done;
+  }
+
   file = filesys_open (file_name);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
+      free (base);
       goto done; 
     }
 
   file_deny_write (file);
   t->exec_file = file;
+  t->cur_dir = dir_open_dir (base);
+  free (base);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)

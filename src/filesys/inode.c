@@ -17,13 +17,13 @@
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
   {
-    //block_sector_t start;               /* First data sector. */
-    off_t length;                       /* File size in bytes. */
-    block_sector_t direct[12];
-    block_sector_t indirect;
-    block_sector_t doubly_indirect;
+    off_t length;                       /* File size in bytes. 	*/
+    block_sector_t direct[12];		/* Direct blocks. */
+    block_sector_t indirect;		/* Singly indirect blocks. */
+    block_sector_t doubly_indirect;	/* Doubly indirect blocks. */
+    uint32_t is_dir;			/* 1: directory; 0: file */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[112];                  /* Not used. */
+    uint32_t unused[111];		/* Not used. */
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -43,6 +43,7 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
+    bool is_dir;
   };
 
 static bool inode_release (struct inode *inode);
@@ -183,7 +184,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, bool is_dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -202,6 +203,7 @@ inode_create (block_sector_t sector, off_t length)
     success = inode_extend (disk_inode, sectors);
     if (success) { 
       disk_inode->length = length;
+      disk_inode->is_dir = is_dir ? 1 : 0;
       block_write (fs_device, sector, disk_inode);
     }
     free (disk_inode);
@@ -242,6 +244,7 @@ inode_open (block_sector_t sector)
   inode->deny_write_cnt = 0;
   inode->removed = false;
   block_read (fs_device, inode->sector, &inode->data);
+  inode->is_dir = (inode->data.is_dir == 1);
   return inode;
 }
 
@@ -502,3 +505,14 @@ inode_release (struct inode *inode)
   return false;
 }
 
+bool
+inode_is_dir (struct inode *inode)
+{
+  return inode->is_dir;
+}
+
+bool
+inode_is_opened (struct inode *inode)
+{
+  return inode->open_cnt > 1;
+}
