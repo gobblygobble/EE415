@@ -581,16 +581,6 @@ readdir (int fd ,char *name)
   struct dir *dir = opened_fsys->dir;
 
   return dir_readdir (dir, name);
-/*
-  struct inode *prev_inode;
-  struct dir *prev_dir;
-
-  dir_lookup (dir, "..", &prev_inode);
-  prev_dir = dir_open (prev_inode);
-  
-  return dir_lookup_by_sector (prev_dir, inode_get_inumber (dir_get_inode (dir))
-				       , &name);
-*/
 }
 
 bool
