@@ -15,7 +15,8 @@ Jinha Chung <gobblygobble@kaist.ac.kr>
 
 >> If you have any preliminary comments on your submission, notes for the
 >> TAs, or extra credit, please give them here.
-***********VM을 enable 했는지
+We submit with VM enabled: 100.9%
+cf) with VM disabled, we get 100.0%.
 
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
